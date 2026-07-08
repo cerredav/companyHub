@@ -8,9 +8,9 @@ import {
   partners as seedPartners,
   teamMembers as seedTeamMembers,
   legacyStrategyBody,
-  RESERVED_SLUGS,
   isReservedSlug,
   topUpProcessDocs,
+  meetings as seedMeetings,
 } from './seed.js'
 
 // ponytail: single storage seam — swap this module for API calls when backend exists
@@ -38,6 +38,16 @@ db.version(3).stores({
   teamMembers: 'id, name, team, updatedAt',
   files: 'id, [parentType+parentId], updatedAt',
   policies: 'id, name, updatedAt',
+})
+
+db.version(4).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+  meetings: 'id, date, updatedAt',
 })
 
 const uid = () => crypto.randomUUID()
@@ -178,6 +188,22 @@ export async function deletePolicy(id) {
   await db.policies.delete(id)
 }
 
+// --- Meetings (Granola summaries) ---
+
+export async function listMeetings() {
+  return db.meetings.orderBy('date').reverse().toArray()
+}
+
+export async function saveMeeting(data) {
+  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  await db.meetings.put(record)
+  return record
+}
+
+export async function deleteMeeting(id) {
+  await db.meetings.delete(id)
+}
+
 // --- File attachments ---
 
 export async function listFiles(parentType, parentId) {
@@ -243,26 +269,28 @@ export function downloadFile(record) {
 // --- Dashboard helpers ---
 
 export async function getCounts() {
-  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings] = await Promise.all([
     db.documents.count(),
     db.engagements.count(),
     db.partners.count(),
     db.teamMembers.count(),
     db.files.count(),
     db.policies.count(),
+    db.meetings.count(),
   ])
   const processDocs = (await listProcessDocuments()).length
-  return { documents, processDocs, engagements, partners, teamMembers, files, policies }
+  return { documents, processDocs, engagements, partners, teamMembers, files, policies, meetings }
 }
 
 export async function getRecentUpdates(limit = 10) {
-  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
     db.files.toArray(),
     db.policies.toArray(),
+    db.meetings.toArray(),
   ])
 
   const items = [
@@ -296,6 +324,12 @@ export async function getRecentUpdates(limit = 10) {
       section: 'Policies',
       updatedAt: p.updatedAt,
     })),
+    ...meetings.map((m) => ({
+      id: m.id,
+      label: m.title,
+      section: 'Meetings',
+      updatedAt: m.updatedAt,
+    })),
     ...files.map((f) => ({
       id: f.id,
       label: f.name,
@@ -312,13 +346,14 @@ export async function getRecentUpdates(limit = 10) {
 // --- Export / Import ---
 
 export async function exportAll() {
-  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
     db.files.toArray(),
     db.policies.toArray(),
+    db.meetings.toArray(),
   ])
 
   const serializedFiles = await Promise.all(
@@ -342,6 +377,7 @@ export async function exportAll() {
     partners,
     teamMembers,
     policies,
+    meetings,
     files: serializedFiles,
   }
 }
@@ -366,7 +402,7 @@ export async function importAll(data) {
       )
     : []
 
-  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies]
+  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies, db.meetings]
 
   await db.transaction('rw', ...tables, async () => {
     await Promise.all(tables.map((t) => t.clear()))
@@ -376,6 +412,7 @@ export async function importAll(data) {
     await db.partners.bulkPut(data.partners || [])
     await db.teamMembers.bulkPut(data.teamMembers || [])
     await db.policies.bulkPut(data.policies || [])
+    await db.meetings.bulkPut(data.meetings || [])
     if (fileRecords.length) await db.files.bulkPut(fileRecords)
   })
 }
@@ -383,8 +420,9 @@ export async function importAll(data) {
 // --- Seeding ---
 
 const SEED_KEY = 'companyHubSeeded'
-const TOPUP_KEY = 'companyHubTopUpV4'
+const TOPUP_KEY = 'companyHubTopUpV5'
 const TOPUP_V3_KEY = 'companyHubTopUpV3'
+const TOPUP_V4_KEY = 'companyHubTopUpV4'
 
 export async function seedIfEmpty() {
   if (localStorage.getItem(SEED_KEY)) return
@@ -404,6 +442,7 @@ export async function seedIfEmpty() {
     db.partners,
     db.teamMembers,
     db.policies,
+    db.meetings,
     async () => {
       await db.documents.bulkAdd([
         { id: uid(), ...strategyDoc, updatedAt: ts },
@@ -426,12 +465,17 @@ export async function seedIfEmpty() {
       await db.policies.bulkAdd(
         seedPolicies.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
       )
+
+      await db.meetings.bulkAdd(
+        seedMeetings.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+      )
     }
   )
 
   localStorage.setItem(SEED_KEY, '1')
   localStorage.setItem(TOPUP_KEY, '1')
   localStorage.setItem(TOPUP_V3_KEY, '1')
+  localStorage.setItem(TOPUP_V4_KEY, '1')
 }
 
 /** One-shot top-up for existing installs — never overwrites user edits */
@@ -464,11 +508,21 @@ export async function seedNewContent() {
   }
 
   // v4 top-up — new process docs only if slug missing
-  for (const doc of topUpProcessDocs) {
-    const existing = await getDocumentBySlug(doc.slug)
-    if (!existing) {
-      await saveDocument({ ...doc, updatedAt: ts })
+  if (!localStorage.getItem(TOPUP_V4_KEY)) {
+    for (const doc of topUpProcessDocs) {
+      const existing = await getDocumentBySlug(doc.slug)
+      if (!existing) {
+        await saveDocument({ ...doc, updatedAt: ts })
+      }
     }
+    localStorage.setItem(TOPUP_V4_KEY, '1')
+  }
+
+  // v5 top-up — seed meetings if table empty
+  if ((await db.meetings.count()) === 0) {
+    await db.meetings.bulkAdd(
+      seedMeetings.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+    )
   }
 
   localStorage.setItem(TOPUP_KEY, '1')
@@ -484,6 +538,7 @@ export async function clearAll() {
     db.teamMembers,
     db.files,
     db.policies,
+    db.meetings,
     async () => {
       await Promise.all([
         db.documents.clear(),
@@ -492,6 +547,7 @@ export async function clearAll() {
         db.teamMembers.clear(),
         db.files.clear(),
         db.policies.clear(),
+        db.meetings.clear(),
       ])
     }
   )

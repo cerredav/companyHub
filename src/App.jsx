@@ -5,6 +5,7 @@ import Strategy from './pages/Strategy'
 import Engagements from './pages/Engagements'
 import Teams from './pages/Teams'
 import Policies from './pages/Policies'
+import Meetings from './pages/Meetings'
 import Processes from './pages/Processes'
 import './styles.css'
 
@@ -18,6 +19,7 @@ const NAV = [
   { id: 'strategy', label: 'Strategy', icon: '◎' },
   { id: 'engagements', label: 'Engagements', icon: '◈' },
   { id: 'teams', label: 'Teams', icon: '◉' },
+  { id: 'meetings', label: 'Team Meetings', icon: '◫' },
   { id: 'policies', label: 'Policies', icon: '§' },
   { id: 'processes', label: 'Processes', icon: '▤' },
 ]
@@ -116,6 +118,7 @@ export default function App() {
     case 'strategy': page = <Strategy />; break
     case 'engagements': page = <Engagements />; break
     case 'teams': page = <Teams teamName={teamName} />; break
+    case 'meetings': page = <Meetings />; break
     case 'policies': page = <Policies />; break
     case 'processes': page = <Processes />; break
     default: page = <Home />

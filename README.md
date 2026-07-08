@@ -19,6 +19,7 @@ Open the URL shown (usually `http://localhost:5173`). Default shared password: *
 | **Strategy** | Five strategy pillars with deck links (from infonet) |
 | **Engagements** | Pilots/contracts with POC, POC contact, supporting documents |
 | **Teams** | Team roster; click a team card for members, engagements, and notes |
+| **Team Meetings** | Meeting summaries pasted from Granola notes, newest first |
 | **Policies** | Company-wide policies (handbook, travel, holidays, etc.) |
 | **Processes** | Living process docs + downloadable attachments |
 

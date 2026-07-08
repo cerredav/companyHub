@@ -15,6 +15,9 @@ import {
   savePolicy,
   listPolicies,
   deletePolicy,
+  saveMeeting,
+  listMeetings,
+  deleteMeeting,
   addFile,
   listFiles,
   deleteFile,
@@ -71,6 +74,20 @@ describe('policies', () => {
 
     await deletePolicy(saved.id)
     expect(await listPolicies()).toHaveLength(0)
+  })
+})
+
+describe('meetings', () => {
+  it('creates, lists newest-first, and deletes', async () => {
+    await saveMeeting({ title: 'Older', date: '2026-01-01', attendees: '', link: '', summary: 'a' })
+    const newer = await saveMeeting({ title: 'Newer', date: '2026-06-01', attendees: 'Tad', link: '', summary: 'b' })
+
+    const list = await listMeetings()
+    expect(list).toHaveLength(2)
+    expect(list[0].title).toBe('Newer')
+
+    await deleteMeeting(newer.id)
+    expect(await listMeetings()).toHaveLength(1)
   })
 })
 
@@ -141,7 +158,7 @@ describe('team members', () => {
 })
 
 describe('export / import', () => {
-  it('round-trips v2 with files and policies', async () => {
+  it('round-trips v2 with files, policies, and meetings', async () => {
     await saveDocument({ slug: 'strategy', title: 'Strategy', body: 'body' })
     const eng = await saveEngagement({
       name: 'E1', type: 'pilot', status: 'active',
@@ -151,6 +168,7 @@ describe('export / import', () => {
     await savePartner({ name: 'P1', kind: 'partner', contact: '', status: 'active', notes: '' })
     await saveTeamMember({ name: 'T1', role: '', team: '', email: '', notes: '' })
     await savePolicy({ name: 'Handbook', lastUpdated: '2026', link: 'https://x.com', notes: '' })
+    await saveMeeting({ title: 'M1', date: '2026-06-01', attendees: '', link: '', summary: 's' })
     const file = new File([new Blob(['attach'])], 'a.txt', { type: 'text/plain' })
     await addFile('engagement', eng.id, file)
 
@@ -158,6 +176,7 @@ describe('export / import', () => {
     expect(exported.version).toBe(2)
     expect(exported.files).toHaveLength(1)
     expect(exported.policies).toHaveLength(1)
+    expect(exported.meetings).toHaveLength(1)
 
     await clearAll()
     await importAll(exported)
@@ -168,6 +187,7 @@ describe('export / import', () => {
     expect(counts.teamMembers).toBe(1)
     expect(counts.files).toBe(1)
     expect(counts.policies).toBe(1)
+    expect(counts.meetings).toBe(1)
   })
 
   it('imports v1 exports without files or policies', async () => {

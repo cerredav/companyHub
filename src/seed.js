@@ -416,3 +416,41 @@ export const teamMembers = [
   { name: 'Allison', role: 'Product', team: 'Product', email: '', notes: 'Roadmap, product feedback' },
   { name: 'Andres', role: 'Engineering', team: 'Engineering', email: 'andres@larx.io', notes: '' },
 ]
+
+// Meeting summaries from Granola notes.
+// record: { title, date (YYYY-MM-DD), attendees, link (Granola transcript), summary (markdown) }
+export const meetings = [
+  {
+    title: 'Weekly Pipeline Review',
+    date: '2026-04-30',
+    attendees: 'Colter, Tad, Colby, Rory, Daria, Brian, Marae',
+    link: 'https://notes.granola.ai/t/61b52318-2aa4-4b61-8090-e131c46df6cf-00demib2',
+    summary: `## Deal Updates & Progress
+
+- **ARL & 203rd** — meeting tomorrow; finalizing contracting details and hard numbers. Potential Army TRACE contract access through same contact. Colby leading pricing.
+- **John Hyatt (ARL BAA)** — $150k for public research (data fusion, information processing); 30-day turnaround if proposal aligns.
+- **Joint EOD** — waiting on Brian for data components; demo prep next week.
+- **Mobile Unit 3** — deployment delayed; team exited Bahrain, travel restricted until June 1. Brent providing AAR updates.
+- **Florida counter-drug** — Chris Otiri now primary POC; will facilitate HSIDA meetings and demos.
+
+## UK Operations
+
+- Tad and Rory completed full day of gov/private sector calls.
+- UK Naval SOF meeting Wednesday — line of sight to £1M+ across deployments.
+- Marine Corps ESRI-replacement opportunity — Brian working Modern Day Marine angle.
+
+## Positioning & Messaging
+
+- Infrastructure-vs-software positioning gaining traction; "inference layer" concept resonating.
+- 75–85% solution approach building customer trust.
+- "Single pane of glass" / "everything in one place" — use consistently.
+
+## Action Items
+
+- Tad: ARL/203rd calendar, sliding-scale pricing (5–100 licenses), contact Patrick Parnell (EPIC), approve expenses
+- Colby: ARL meeting 1–2pm ET, TRACE opportunity, Captain Dwyer within 2 weeks (via Ed Padinski)
+- Brian: USMC outfit proposal by June
+- All: Update HubSpot before Friday
+`,
+  },
+]
