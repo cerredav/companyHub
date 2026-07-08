@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { seedIfEmpty } from './db'
+import { seedIfEmpty, seedNewContent } from './db'
 import Home from './pages/Home'
 import Strategy from './pages/Strategy'
 import Engagements from './pages/Engagements'
@@ -89,7 +89,9 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    seedIfEmpty().then(() => setReady(true))
+    seedIfEmpty()
+      .then(() => seedNewContent())
+      .then(() => setReady(true))
   }, [])
 
   const toggleTheme = () => {

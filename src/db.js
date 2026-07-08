@@ -1,10 +1,14 @@
 import Dexie from 'dexie'
 import {
   strategyDoc,
+  homeDocs,
   processDocs,
+  policies as seedPolicies,
   engagements as seedEngagements,
   partners as seedPartners,
   teamMembers as seedTeamMembers,
+  legacyStrategyBody,
+  RESERVED_SLUGS,
 } from './seed.js'
 
 // ponytail: single storage seam — swap this module for API calls when backend exists
@@ -25,8 +29,23 @@ db.version(2).stores({
   files: 'id, [parentType+parentId], updatedAt',
 })
 
+db.version(3).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+})
+
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
+
+function docSection(slug) {
+  if (slug === 'strategy') return 'Strategy'
+  if (slug === 'company-info' || slug === 'quick-links') return 'Home'
+  return 'Processes'
+}
 
 // --- Blob helpers for export/import ---
 
@@ -59,7 +78,7 @@ function base64ToBlob(base64, mimeType) {
   return new Blob([bytes], { type: mimeType })
 }
 
-// --- Documents (Strategy + Processes) ---
+// --- Documents (Strategy + Processes + Home cards) ---
 
 export async function getDocumentBySlug(slug) {
   return db.documents.where('slug').equals(slug).first()
@@ -71,7 +90,7 @@ export async function listDocuments() {
 
 export async function listProcessDocuments() {
   const docs = await listDocuments()
-  return docs.filter((d) => d.slug !== 'strategy')
+  return docs.filter((d) => !RESERVED_SLUGS.has(d.slug))
 }
 
 export async function saveDocument({ id, slug, title, body }) {
@@ -140,6 +159,22 @@ export async function deleteTeamMember(id) {
   await db.teamMembers.delete(id)
 }
 
+// --- Policies ---
+
+export async function listPolicies() {
+  return db.policies.orderBy('name').toArray()
+}
+
+export async function savePolicy(data) {
+  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  await db.policies.put(record)
+  return record
+}
+
+export async function deletePolicy(id) {
+  await db.policies.delete(id)
+}
+
 // --- File attachments ---
 
 export async function listFiles(parentType, parentId) {
@@ -205,31 +240,33 @@ export function downloadFile(record) {
 // --- Dashboard helpers ---
 
 export async function getCounts() {
-  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
     db.documents.count(),
     db.engagements.count(),
     db.partners.count(),
     db.teamMembers.count(),
     db.files.count(),
+    db.policies.count(),
   ])
   const processDocs = (await listProcessDocuments()).length
-  return { documents, processDocs, engagements, partners, teamMembers, files }
+  return { documents, processDocs, engagements, partners, teamMembers, files, policies }
 }
 
 export async function getRecentUpdates(limit = 10) {
-  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
     db.files.toArray(),
+    db.policies.toArray(),
   ])
 
   const items = [
     ...documents.map((d) => ({
       id: d.id,
       label: d.title,
-      section: d.slug === 'strategy' ? 'Strategy' : 'Processes',
+      section: docSection(d.slug),
       updatedAt: d.updatedAt,
     })),
     ...engagements.map((e) => ({
@@ -250,6 +287,12 @@ export async function getRecentUpdates(limit = 10) {
       section: 'Teams',
       updatedAt: m.updatedAt,
     })),
+    ...policies.map((p) => ({
+      id: p.id,
+      label: p.name,
+      section: 'Policies',
+      updatedAt: p.updatedAt,
+    })),
     ...files.map((f) => ({
       id: f.id,
       label: f.name,
@@ -266,12 +309,13 @@ export async function getRecentUpdates(limit = 10) {
 // --- Export / Import ---
 
 export async function exportAll() {
-  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
     db.files.toArray(),
+    db.policies.toArray(),
   ])
 
   const serializedFiles = await Promise.all(
@@ -294,6 +338,7 @@ export async function exportAll() {
     engagements,
     partners,
     teamMembers,
+    policies,
     files: serializedFiles,
   }
 }
@@ -318,7 +363,7 @@ export async function importAll(data) {
       )
     : []
 
-  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files]
+  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies]
 
   await db.transaction('rw', ...tables, async () => {
     await Promise.all(tables.map((t) => t.clear()))
@@ -327,13 +372,15 @@ export async function importAll(data) {
     await db.engagements.bulkPut(data.engagements || [])
     await db.partners.bulkPut(data.partners || [])
     await db.teamMembers.bulkPut(data.teamMembers || [])
+    await db.policies.bulkPut(data.policies || [])
     if (fileRecords.length) await db.files.bulkPut(fileRecords)
   })
 }
 
-// --- First-run seed ---
+// --- Seeding ---
 
 const SEED_KEY = 'companyHubSeeded'
+const TOPUP_KEY = 'companyHubTopUpV3'
 
 export async function seedIfEmpty() {
   if (localStorage.getItem(SEED_KEY)) return
@@ -346,38 +393,90 @@ export async function seedIfEmpty() {
 
   const ts = now()
 
-  await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, async () => {
-    await db.documents.bulkAdd([
-      { id: uid(), ...strategyDoc, updatedAt: ts },
-      ...processDocs.map((d) => ({ id: uid(), ...d, updatedAt: ts })),
-    ])
+  await db.transaction(
+    'rw',
+    db.documents,
+    db.engagements,
+    db.partners,
+    db.teamMembers,
+    db.policies,
+    async () => {
+      await db.documents.bulkAdd([
+        { id: uid(), ...strategyDoc, updatedAt: ts },
+        ...homeDocs.map((d) => ({ id: uid(), ...d, updatedAt: ts })),
+        ...processDocs.map((d) => ({ id: uid(), ...d, updatedAt: ts })),
+      ])
 
-    await db.engagements.bulkAdd(
-      seedEngagements.map((e) => ({ id: uid(), ...e, updatedAt: ts }))
-    )
+      await db.engagements.bulkAdd(
+        seedEngagements.map((e) => ({ id: uid(), ...e, updatedAt: ts }))
+      )
 
-    await db.partners.bulkAdd(
-      seedPartners.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
-    )
+      await db.partners.bulkAdd(
+        seedPartners.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
+      )
 
-    await db.teamMembers.bulkAdd(
-      seedTeamMembers.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
-    )
-  })
+      await db.teamMembers.bulkAdd(
+        seedTeamMembers.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+      )
+
+      await db.policies.bulkAdd(
+        seedPolicies.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
+      )
+    }
+  )
 
   localStorage.setItem(SEED_KEY, '1')
+  localStorage.setItem(TOPUP_KEY, '1')
+}
+
+/** One-shot top-up for existing installs — never overwrites user edits */
+export async function seedNewContent() {
+  if (localStorage.getItem(TOPUP_KEY)) return
+
+  const ts = now()
+
+  if ((await db.policies.count()) === 0) {
+    await db.policies.bulkAdd(
+      seedPolicies.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
+    )
+  }
+
+  for (const doc of homeDocs) {
+    const existing = await getDocumentBySlug(doc.slug)
+    if (!existing) {
+      await saveDocument({ ...doc, updatedAt: ts })
+    }
+  }
+
+  const strategy = await getDocumentBySlug('strategy')
+  if (strategy && strategy.body === legacyStrategyBody) {
+    await saveDocument({ ...strategy, body: strategyDoc.body })
+  }
+
+  localStorage.setItem(TOPUP_KEY, '1')
 }
 
 /** Test helper — wipe all tables */
 export async function clearAll() {
-  await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, db.files, async () => {
-    await Promise.all([
-      db.documents.clear(),
-      db.engagements.clear(),
-      db.partners.clear(),
-      db.teamMembers.clear(),
-      db.files.clear(),
-    ])
-  })
+  await db.transaction(
+    'rw',
+    db.documents,
+    db.engagements,
+    db.partners,
+    db.teamMembers,
+    db.files,
+    db.policies,
+    async () => {
+      await Promise.all([
+        db.documents.clear(),
+        db.engagements.clear(),
+        db.partners.clear(),
+        db.teamMembers.clear(),
+        db.files.clear(),
+        db.policies.clear(),
+      ])
+    }
+  )
   localStorage.removeItem(SEED_KEY)
+  localStorage.removeItem(TOPUP_KEY)
 }

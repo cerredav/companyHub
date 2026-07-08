@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { marked } from 'marked'
 
-export default function MarkdownDoc({ title, body, onSave, onDelete }) {
+export default function MarkdownDoc({ title, body, onSave, onDelete, compact = false }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(body)
   const [saving, setSaving] = useState(false)
@@ -26,9 +26,9 @@ export default function MarkdownDoc({ title, body, onSave, onDelete }) {
   }
 
   return (
-    <div className="markdown-doc">
+    <div className={`markdown-doc${compact ? ' markdown-doc--compact' : ''}`}>
       <div className="page-header">
-        <h1>{title}</h1>
+        {compact ? <h2>{title}</h2> : <h1>{title}</h1>}
         <div className="btn-group">
           {editing ? (
             <>
@@ -38,7 +38,7 @@ export default function MarkdownDoc({ title, body, onSave, onDelete }) {
               <button className="btn" onClick={handleCancel}>Cancel</button>
             </>
           ) : (
-            <button className="btn btn-primary" onClick={() => setEditing(true)}>Edit</button>
+            <button className={`btn ${compact ? 'btn-sm' : 'btn-primary'}`} onClick={() => setEditing(true)}>Edit</button>
           )}
           {onDelete && !editing && (
             <button className="btn btn-danger" onClick={onDelete}>Delete</button>
@@ -51,7 +51,7 @@ export default function MarkdownDoc({ title, body, onSave, onDelete }) {
           className="markdown-editor"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={24}
+          rows={compact ? 12 : 24}
         />
       ) : (
         <div

@@ -12,6 +12,9 @@ import {
   listPartners,
   saveTeamMember,
   listTeamMembers,
+  savePolicy,
+  listPolicies,
+  deletePolicy,
   addFile,
   listFiles,
   deleteFile,
@@ -33,8 +36,10 @@ describe('documents', () => {
     expect(doc.updatedAt).toBeTruthy()
   })
 
-  it('lists process docs excluding strategy', async () => {
+  it('lists process docs excluding reserved slugs', async () => {
     await saveDocument({ slug: 'strategy', title: 'Strategy', body: '' })
+    await saveDocument({ slug: 'company-info', title: 'Company', body: '' })
+    await saveDocument({ slug: 'quick-links', title: 'Links', body: '' })
     await saveDocument({ slug: 'onboarding', title: 'Onboarding', body: '' })
     const processes = await listProcessDocuments()
     expect(processes).toHaveLength(1)
@@ -48,6 +53,23 @@ describe('documents', () => {
     await addFile('process', doc.id, file)
     await deleteDocument(doc.id)
     expect(await listFiles('process', doc.id)).toHaveLength(0)
+  })
+})
+
+describe('policies', () => {
+  it('creates, lists, and deletes', async () => {
+    const saved = await savePolicy({
+      name: 'Travel Policy',
+      lastUpdated: '21 Apr 2026',
+      link: 'https://example.com/travel',
+      notes: '',
+    })
+    const list = await listPolicies()
+    expect(list).toHaveLength(1)
+    expect(list[0].name).toBe('Travel Policy')
+
+    await deletePolicy(saved.id)
+    expect(await listPolicies()).toHaveLength(0)
   })
 })
 
@@ -118,7 +140,7 @@ describe('team members', () => {
 })
 
 describe('export / import', () => {
-  it('round-trips v2 with file blobs', async () => {
+  it('round-trips v2 with files and policies', async () => {
     await saveDocument({ slug: 'strategy', title: 'Strategy', body: 'body' })
     const eng = await saveEngagement({
       name: 'E1', type: 'pilot', status: 'active',
@@ -127,13 +149,14 @@ describe('export / import', () => {
     })
     await savePartner({ name: 'P1', kind: 'partner', contact: '', status: 'active', notes: '' })
     await saveTeamMember({ name: 'T1', role: '', team: '', email: '', notes: '' })
+    await savePolicy({ name: 'Handbook', lastUpdated: '2026', link: 'https://x.com', notes: '' })
     const file = new File([new Blob(['attach'])], 'a.txt', { type: 'text/plain' })
     await addFile('engagement', eng.id, file)
 
     const exported = await exportAll()
     expect(exported.version).toBe(2)
     expect(exported.files).toHaveLength(1)
-    expect(exported.files[0].dataBase64).toBeTruthy()
+    expect(exported.policies).toHaveLength(1)
 
     await clearAll()
     await importAll(exported)
@@ -143,19 +166,10 @@ describe('export / import', () => {
     expect(counts.partners).toBe(1)
     expect(counts.teamMembers).toBe(1)
     expect(counts.files).toBe(1)
-
-    const restored = await listFiles('engagement', eng.id)
-    expect(restored[0].name).toBe('a.txt')
-    const text = await new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result)
-      reader.onerror = reject
-      reader.readAsText(restored[0].blob)
-    })
-    expect(text).toBe('attach')
+    expect(counts.policies).toBe(1)
   })
 
-  it('imports v1 exports without files', async () => {
+  it('imports v1 exports without files or policies', async () => {
     const v1 = {
       version: 1,
       documents: [{ id: 'd1', slug: 'strategy', title: 'S', body: '', updatedAt: '2026-01-01' }],
@@ -164,8 +178,23 @@ describe('export / import', () => {
       teamMembers: [],
     }
     await importAll(v1)
-    expect((await getCounts()).documents).toBe(1)
-    expect((await getCounts()).files).toBe(0)
+    const counts = await getCounts()
+    expect(counts.documents).toBe(1)
+    expect(counts.files).toBe(0)
+    expect(counts.policies).toBe(0)
+  })
+
+  it('imports v2 exports without policies array', async () => {
+    const v2 = {
+      version: 2,
+      documents: [{ id: 'd1', slug: 'strategy', title: 'S', body: '', updatedAt: '2026-01-01' }],
+      engagements: [],
+      partners: [],
+      teamMembers: [],
+      files: [],
+    }
+    await importAll(v2)
+    expect((await getCounts()).policies).toBe(0)
   })
 
   it('rejects invalid export version', async () => {

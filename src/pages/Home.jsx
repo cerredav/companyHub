@@ -1,5 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { getCounts, getRecentUpdates, exportAll, importAll } from '../db'
+import MarkdownDoc from '../components/MarkdownDoc'
+import { getCounts, getRecentUpdates, exportAll, importAll, getDocumentBySlug, saveDocument } from '../db'
 
 function downloadJson(data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -14,6 +15,8 @@ function downloadJson(data) {
 export default function Home() {
   const counts = useLiveQuery(getCounts) ?? {}
   const recent = useLiveQuery(() => getRecentUpdates(8)) ?? []
+  const companyInfo = useLiveQuery(() => getDocumentBySlug('company-info'))
+  const quickLinks = useLiveQuery(() => getDocumentBySlug('quick-links'))
 
   const handleExport = async () => {
     const data = await exportAll()
@@ -42,7 +45,26 @@ export default function Home() {
   return (
     <div className="page home">
       <h1>Home</h1>
-      <p className="subtitle">Company knowledge hub — one place for strategy, engagements, teams, and processes.</p>
+      <p className="subtitle">Larx team dashboard — strategy, engagements, teams, and processes in one place.</p>
+
+      <div className="home-cards">
+        {companyInfo && (
+          <MarkdownDoc
+            compact
+            title={companyInfo.title}
+            body={companyInfo.body}
+            onSave={(body) => saveDocument({ ...companyInfo, body })}
+          />
+        )}
+        {quickLinks && (
+          <MarkdownDoc
+            compact
+            title={quickLinks.title}
+            body={quickLinks.body}
+            onSave={(body) => saveDocument({ ...quickLinks, body })}
+          />
+        )}
+      </div>
 
       <div className="stat-grid">
         <div className="stat-card">
@@ -50,20 +72,16 @@ export default function Home() {
           <span className="stat-label">Engagements</span>
         </div>
         <div className="stat-card">
-          <span className="stat-value">{counts.partners ?? '—'}</span>
-          <span className="stat-label">Partners</span>
-        </div>
-        <div className="stat-card">
           <span className="stat-value">{counts.teamMembers ?? '—'}</span>
           <span className="stat-label">Team Members</span>
         </div>
         <div className="stat-card">
-          <span className="stat-value">{counts.processDocs ?? '—'}</span>
-          <span className="stat-label">Process Docs</span>
+          <span className="stat-value">{counts.policies ?? '—'}</span>
+          <span className="stat-label">Policies</span>
         </div>
         <div className="stat-card">
-          <span className="stat-value">{counts.files ?? '—'}</span>
-          <span className="stat-label">Attachments</span>
+          <span className="stat-value">{counts.processDocs ?? '—'}</span>
+          <span className="stat-label">Process Docs</span>
         </div>
       </div>
 

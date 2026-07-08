@@ -226,6 +226,55 @@ input:focus, select:focus, textarea:focus {
 
 /* Home dashboard */
 
+.home-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-6);
+  margin-bottom: var(--space-8);
+}
+
+@media (max-width: 900px) {
+  .home-cards { grid-template-columns: 1fr; }
+}
+
+.markdown-doc--compact .page-header {
+  margin-bottom: var(--space-4);
+}
+
+.markdown-doc--compact .page-header h2 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--larx-blue);
+}
+
+.markdown-doc--compact .markdown-preview {
+  padding: var(--space-4);
+  font-size: 11px;
+}
+
+.markdown-doc--compact .markdown-preview h1 {
+  font-size: 14px;
+}
+
+.markdown-doc--compact .markdown-editor {
+  min-height: 200px;
+}
+
+.section-heading {
+  margin-top: var(--space-8);
+  margin-bottom: var(--space-4);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--larx-blue);
+}
+
+.section-note {
+  margin-top: calc(-1 * var(--space-2));
+  margin-bottom: var(--space-4);
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

@@ -23,7 +23,7 @@ Open the URL shown (usually `http://localhost:5173`). Default shared password: *
 
 ## Seed data
 
-First-run seed comes from [`src/seed.js`](src/seed.js), populated from Larx internal pipeline notes. The infonet Google Site requires auth — update `seed.js` when infonet changes, then re-import via Home.
+First-run seed comes from [`src/seed.js`](src/seed.js), populated from downloaded infonet page sources. Existing installs get a one-shot top-up (`seedNewContent`) for policies, home cards, and strategy (only if strategy was never edited).
 
 To reset and re-seed: clear site data in browser devtools (IndexedDB + localStorage), or import a fresh export.
 

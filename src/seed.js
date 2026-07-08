@@ -1,10 +1,8 @@
-// Seeded from Larx infonet / internal pipeline notes (infonet Google Site requires auth).
-// Update this file when infonet content changes; re-import via Home export/import.
+// Seeded from Larx infonet (downloaded page sources, Jul 2026).
+// Update when infonet changes; re-import via Home export/import.
 
-export const strategyDoc = {
-  slug: 'strategy',
-  title: 'Larx Strategy',
-  body: `# Larx Strategy
+/** Previous seed body — used to detect unedited strategy for one-shot top-up */
+export const legacyStrategyBody = `# Larx Strategy
 
 ## Mission
 
@@ -28,8 +26,81 @@ Build the inference layer — the bridge between visualization and decision-maki
 - "Single pane of glass"
 - "Everything in one place"
 - "Deploy fast, customize with engineering"
+`
+
+export const strategyDoc = {
+  slug: 'strategy',
+  title: 'Larx Strategy',
+  body: `# Larx Strategy
+
+## Purpose
+
+Enable high-stakes enterprise teams to survive in an information-overloaded environment.
+
+Users curate interconnected knowledge, leverage automated fusion and analysis, and collaborate to win.
+
+**In one sentence:** Larx is a cognitive system for entire teams that operate in mission-critical environments.
+
+## Today, Zero to One
+
+## Strategy pillars
+
+Each pillar has a deck on infonet — open the link for the full presentation.
+
+| Pillar | Deck |
+|--------|------|
+| The Larx Strategy | [Open deck](https://docs.google.com/presentation/d/1i9D9ieNkhjAYwVm1QVjxvf3O3u6i-H8SIci4M27udBA/present) |
+| Product Strategy (FY28 Vision, rev Jun 2026) | [Open deck](https://docs.google.com/presentation/d/12PmImHN3-TulPG9UjZvDW7o1WHj6eFpQPIrUlzgRZsk/present) |
+| Marketing Strategy | [Open deck](https://docs.google.com/presentation/d/1hW3MUv2iCYiXhtOsY5W50LswoNZ5ot5KbQU2jqMvwo0/present) |
+| Sales Strategy | [Open deck](https://docs.google.com/presentation/d/1PDQ8ohLQchwWIf2zTmjgVwuLVwjKACmIerXFVLgm8D4/present) |
+| Human Capital Strategy | See infonet Team Information |
 `,
 }
+
+export const companyInfoDoc = {
+  slug: 'company-info',
+  title: 'Company',
+  body: `# Who and What Are We?
+
+**Purpose:** Enable high-stakes enterprise teams to survive in an information-overloaded environment.
+
+**Larx, in one sentence:** A cognitive system for entire teams that operate in mission-critical environments.
+
+## Offices
+
+**Larx, Inc.** (Parent)
+3131 Piedmont Road, Suite 200
+Atlanta, GA 30305
+
+**Larx AI Ltd.** (Europe)
+Manfield House, 1 Southampton Street
+London, WC2R 0LR
+`,
+}
+
+export const quickLinksDoc = {
+  slug: 'quick-links',
+  title: 'Quick Links',
+  body: `# Quick Links
+
+Curated from infonet — edit to add or remove.
+
+- [Google Drive](https://drive.google.com/drive/folders/0AGUo78tsvhSuUk9PVA)
+- [Larx Demo Site](http://app.larx-orion.com)
+- [Agreement Dashboard](https://docs.google.com/spreadsheets/d/1RmbSPj0g_Fk5fkl9RujUcFRyDZB0Vku3KwIz7uZRxWc/edit) — MNDA, partnership, demo status
+- [Pilot Programs](https://docs.google.com/spreadsheets/d/1R9OaACKjdDbQoD_hNpFXclV9xwKqpo8NGMVUne1Fruc/edit)
+- [Sales Process & Assets](https://docs.google.com/document/d/1Y8QUaBvkuOdhJD1NxfOAI-WRt0IJQssqz7ZeKgJqK-s/edit)
+- [Employee Handbook](https://drive.google.com/file/d/1q-34t0n0_gYekKQzeizixWyA5jO5cW9X/view)
+- [Time Off Request](https://docs.google.com/forms/d/e/1FAIpQLScgV0Owf2Vex-D9uQwG8tP12ZKbBcVPMYcCblSBltthCk6img/viewform)
+- [Brand Assets](https://drive.google.com/drive/folders/1db6QYvDL-weOrmhz5Cy9kJM0-uye4AGp)
+- [Payroll & Expenses (Every.io)](https://app.every.io/login)
+- [Platform & Portal Access](https://docs.google.com/spreadsheets/d/1ULOkO8DErnnVYJoZTYm5O32RGeIAYcxH/edit)
+`,
+}
+
+export const homeDocs = [companyInfoDoc, quickLinksDoc]
+
+export const RESERVED_SLUGS = new Set(['strategy', 'company-info', 'quick-links'])
 
 export const processDocs = [
   {
@@ -39,7 +110,7 @@ export const processDocs = [
 
 1. Set up @larx.io accounts (Google, Slack, HubSpot)
 2. Meet the team — schedule intros with Colter, Tad, and your squad lead
-3. Review active engagements in Company Hub
+3. Review active engagements in Larx Hub
 4. Read Strategy doc and current process docs
 5. Join weekly pipeline review
 `,
@@ -57,10 +128,6 @@ Update all deal stages and next steps **before Friday** each week for weekend re
 - Next step has owner and date
 - POC contact info current
 - Notes capture blockers
-
-## Owners
-
-Each engagement \`owner\` field in Company Hub should match HubSpot deal owner.
 `,
   },
   {
@@ -77,13 +144,12 @@ Each engagement \`owner\` field in Company Hub should match HubSpot deal owner.
 ## Day before
 
 - Dry run with engineering
-- Export supporting deck to engagement attachments
+- Upload deck to engagement attachments
 - Confirm environment (prod vs demo instance)
 
 ## After demo
 
-- Log next steps in Company Hub within 24h
-- Upload any shared materials to engagement attachments
+- Log next steps in Larx Hub within 24h
 `,
   },
   {
@@ -91,17 +157,42 @@ Each engagement \`owner\` field in Company Hub should match HubSpot deal owner.
     title: 'Pricing & Contracting',
     body: `# Pricing & Contracting
 
-## License pricing
+Prepare sliding scale pricing (5–100 licenses) before customer meetings.
 
-Prepare sliding scale pricing (5–100 licenses) before customer meetings. No "we'll get back to you" on pricing calls.
-
-## Contracting checklist
+## Checklist
 
 - [ ] Hard numbers finalized
 - [ ] POC and legal contact identified
-- [ ] TRACE / BAA / direct contract path confirmed
-- [ ] Timeline and deliverables documented in engagement notes
+- [ ] Contract path confirmed (TRACE / BAA / direct)
+- [ ] Timeline documented in engagement notes
 `,
+  },
+]
+
+export const policies = [
+  {
+    name: 'Employee Handbook',
+    lastUpdated: '21 Apr 2026',
+    link: 'https://drive.google.com/file/d/1q-34t0n0_gYekKQzeizixWyA5jO5cW9X/view?usp=drive_link',
+    notes: '',
+  },
+  {
+    name: 'Computer and Phone Policy',
+    lastUpdated: '21 Apr 2026',
+    link: 'https://docs.google.com/document/d/1eZpvRGhxKAWJ6ZNqyn6dRGjAIPpuPFs8z2QZaaxogtg/edit?usp=sharing',
+    notes: '',
+  },
+  {
+    name: 'Travel Policy',
+    lastUpdated: '21 Apr 2026',
+    link: 'https://docs.google.com/document/d/1qsBYr5EO0RB2Z-fO4j0HdFJC85GUfPa9/edit?usp=sharing',
+    notes: '',
+  },
+  {
+    name: 'Company Holidays',
+    lastUpdated: '',
+    link: 'https://www.google.com/calendar/embed?color=%23cca6ac&src=c_4d5b75ec8049903aa982d9f5c7ab3d82066fd38c0c8c387d5a6a68fa7556',
+    notes: 'Google Calendar',
   },
 ]
 
@@ -117,7 +208,7 @@ export const engagements = [
     pocContact: '',
     startDate: '',
     nextStep: 'Finalize contracting details; explore TRACE contract access',
-    notes: 'Meeting scheduled; hard numbers in progress. Colby leading pricing — no deferrals.',
+    notes: 'Colby leading pricing — no deferrals.',
   },
   {
     name: 'Army ARL BAA — Data Fusion Research',
@@ -142,7 +233,7 @@ export const engagements = [
     poc: 'Brian',
     pocContact: '',
     startDate: '',
-    nextStep: 'Demo Tuesday/Wednesday; waiting on Brian for data components',
+    nextStep: 'Demo Tuesday/Wednesday; waiting on data components',
     notes: '',
   },
   {
@@ -155,7 +246,7 @@ export const engagements = [
     poc: 'Brent',
     pocContact: '',
     startDate: '',
-    nextStep: 'Await travel clearance (restricted until June 1); Brent AAR updates',
+    nextStep: 'Await travel clearance; Brent AAR updates',
     notes: 'Team exited Bahrain due to operational questioning.',
   },
   {
@@ -169,7 +260,7 @@ export const engagements = [
     pocContact: '',
     startDate: '',
     nextStep: 'Schedule HSIDA meetings and demos via Chris',
-    notes: 'Chris is adjacent to decision makers, not middle management.',
+    notes: 'Chris is adjacent to decision makers.',
   },
   {
     name: 'UK Naval Special Operations',
@@ -182,7 +273,7 @@ export const engagements = [
     pocContact: '',
     startDate: '',
     nextStep: 'Structure deals — line of sight to £1M+ across deployments',
-    notes: 'Tad and Rory completed full day of gov/private sector calls.',
+    notes: '',
   },
   {
     name: 'USMC ESRI Replacement',
@@ -194,7 +285,7 @@ export const engagements = [
     poc: 'Captain Dwyer',
     pocContact: 'Coordinate via Ed Padinski',
     startDate: '',
-    nextStep: 'Submit outfit proposal by June; Modern Day Marine angle',
+    nextStep: 'Submit outfit proposal by June',
     notes: 'Potential primary GIS tool replacement for Marines.',
   },
   {
