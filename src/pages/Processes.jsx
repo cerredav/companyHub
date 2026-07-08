@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import MarkdownDoc from '../components/MarkdownDoc'
+import AttachmentList from '../components/AttachmentList'
 import { listProcessDocuments, saveDocument, deleteDocument } from '../db'
 
 function slugify(title) {
@@ -40,7 +41,7 @@ export default function Processes() {
   return (
     <div className="page processes">
       <h1>Processes</h1>
-      <p className="subtitle">Living process docs — no more lost Google Drive files.</p>
+      <p className="subtitle">Living process docs with downloadable attachments.</p>
 
       <div className="process-layout">
         <aside className="process-list">
@@ -69,12 +70,19 @@ export default function Processes() {
 
         <div className="process-content">
           {active ? (
-            <MarkdownDoc
-              title={active.title}
-              body={active.body}
-              onSave={(body) => saveDocument({ ...active, body })}
-              onDelete={handleDelete}
-            />
+            <>
+              <MarkdownDoc
+                title={active.title}
+                body={active.body}
+                onSave={(body) => saveDocument({ ...active, body })}
+                onDelete={handleDelete}
+              />
+              <AttachmentList
+                parentType="process"
+                parentId={active.id}
+                title="Process Documents"
+              />
+            </>
           ) : (
             <p className="muted">Select a process or create a new one.</p>
           )}

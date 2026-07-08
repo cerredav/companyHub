@@ -10,6 +10,7 @@ import './styles.css'
 // ponytail: cosmetic gate only — not security; data is client-side
 const SHARED_PASSWORD = 'company'
 const UNLOCK_KEY = 'companyHubUnlocked'
+const THEME_KEY = 'companyHubTheme'
 
 const NAV = [
   { id: 'home', label: 'Home', icon: '⌂' },
@@ -25,6 +26,10 @@ const PAGES = {
   engagements: Engagements,
   teams: Teams,
   processes: Processes,
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme
 }
 
 function PasswordGate({ onUnlock }) {
@@ -75,11 +80,21 @@ function useHashRoute() {
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
   const [ready, setReady] = useState(false)
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark')
   const route = useHashRoute()
+
+  useEffect(() => {
+    applyTheme(theme)
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
 
   useEffect(() => {
     seedIfEmpty().then(() => setReady(true))
   }, [])
+
+  const toggleTheme = () => {
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+  }
 
   if (!unlocked) {
     return <PasswordGate onUnlock={() => setUnlocked(true)} />
@@ -94,7 +109,7 @@ export default function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="sidebar-brand">Company Hub</div>
+        <div className="sidebar-brand">Larx Hub</div>
         <nav>
           {NAV.map((item) => (
             <a
@@ -107,6 +122,11 @@ export default function App() {
             </a>
           ))}
         </nav>
+        <div className="sidebar-footer">
+          <button className="btn theme-toggle" onClick={toggleTheme}>
+            {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
+          </button>
+        </div>
       </aside>
       <main className="main">
         <Page />

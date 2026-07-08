@@ -1,17 +1,63 @@
 import Dexie from 'dexie'
+import {
+  strategyDoc,
+  processDocs,
+  engagements as seedEngagements,
+  partners as seedPartners,
+  teamMembers as seedTeamMembers,
+} from './seed.js'
 
 // ponytail: single storage seam — swap this module for API calls when backend exists
 export const db = new Dexie('companyHub')
 
 db.version(1).stores({
-  documents: 'id, slug, updatedAt',
+  documents: 'id, slug, title, updatedAt',
   engagements: 'id, status, owner, updatedAt',
-  partners: 'id, kind, status, updatedAt',
-  teamMembers: 'id, team, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+})
+
+db.version(2).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
 })
 
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
+
+// --- Blob helpers for export/import ---
+
+function normalizeBlob(value, mimeType) {
+  if (value instanceof Blob) return value
+  if (value instanceof ArrayBuffer) {
+    return new Blob([value], { type: mimeType || 'application/octet-stream' })
+  }
+  return new Blob([value], { type: mimeType || 'application/octet-stream' })
+}
+
+function normalizeFile(record) {
+  return { ...record, blob: normalizeBlob(record.blob, record.mimeType) }
+}
+
+async function blobToBase64(blob, mimeType = 'application/octet-stream') {
+  const b = normalizeBlob(blob, mimeType)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result.split(',')[1])
+    reader.onerror = reject
+    reader.readAsDataURL(b)
+  })
+}
+
+function base64ToBlob(base64, mimeType) {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return new Blob([bytes], { type: mimeType })
+}
 
 // --- Documents (Strategy + Processes) ---
 
@@ -41,6 +87,7 @@ export async function saveDocument({ id, slug, title, body }) {
 }
 
 export async function deleteDocument(id) {
+  await deleteFilesForParent('process', id)
   await db.documents.delete(id)
 }
 
@@ -57,6 +104,7 @@ export async function saveEngagement(data) {
 }
 
 export async function deleteEngagement(id) {
+  await deleteFilesForParent('engagement', id)
   await db.engagements.delete(id)
 }
 
@@ -92,25 +140,89 @@ export async function deleteTeamMember(id) {
   await db.teamMembers.delete(id)
 }
 
+// --- File attachments ---
+
+export async function listFiles(parentType, parentId) {
+  const files = await db.files
+    .where('[parentType+parentId]')
+    .equals([parentType, parentId])
+    .toArray()
+  return files.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map(normalizeFile)
+}
+
+export async function countFiles(parentType, parentId) {
+  return db.files
+    .where('[parentType+parentId]')
+    .equals([parentType, parentId])
+    .count()
+}
+
+async function fileToBuffer(file) {
+  if (typeof file.arrayBuffer === 'function') return file.arrayBuffer()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsArrayBuffer(file)
+  })
+}
+
+export async function addFile(parentType, parentId, file) {
+  const buffer = await fileToBuffer(file)
+  const record = {
+    id: uid(),
+    name: file.name,
+    mimeType: file.type || 'application/octet-stream',
+    size: file.size,
+    blob: buffer,
+    parentType,
+    parentId,
+    updatedAt: now(),
+  }
+  await db.files.add(record)
+  return normalizeFile(record)
+}
+
+export async function deleteFile(id) {
+  await db.files.delete(id)
+}
+
+async function deleteFilesForParent(parentType, parentId) {
+  const files = await listFiles(parentType, parentId)
+  await db.files.bulkDelete(files.map((f) => f.id))
+}
+
+export function downloadFile(record) {
+  const blob = normalizeBlob(record.blob, record.mimeType)
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = record.name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 // --- Dashboard helpers ---
 
 export async function getCounts() {
-  const [documents, engagements, partners, teamMembers] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
     db.documents.count(),
     db.engagements.count(),
     db.partners.count(),
     db.teamMembers.count(),
+    db.files.count(),
   ])
   const processDocs = (await listProcessDocuments()).length
-  return { documents, processDocs, engagements, partners, teamMembers }
+  return { documents, processDocs, engagements, partners, teamMembers, files }
 }
 
 export async function getRecentUpdates(limit = 10) {
-  const [documents, engagements, partners, teamMembers] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
+    db.files.toArray(),
   ])
 
   const items = [
@@ -138,6 +250,12 @@ export async function getRecentUpdates(limit = 10) {
       section: 'Teams',
       updatedAt: m.updatedAt,
     })),
+    ...files.map((f) => ({
+      id: f.id,
+      label: f.name,
+      section: 'Files',
+      updatedAt: f.updatedAt,
+    })),
   ]
 
   return items
@@ -148,37 +266,68 @@ export async function getRecentUpdates(limit = 10) {
 // --- Export / Import ---
 
 export async function exportAll() {
-  const [documents, engagements, partners, teamMembers] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
     db.teamMembers.toArray(),
+    db.files.toArray(),
   ])
+
+  const serializedFiles = await Promise.all(
+    files.map(async (f) => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      size: f.size,
+      parentType: f.parentType,
+      parentId: f.parentId,
+      updatedAt: f.updatedAt,
+      dataBase64: await blobToBase64(f.blob, f.mimeType),
+    }))
+  )
+
   return {
-    version: 1,
+    version: 2,
     exportedAt: now(),
     documents,
     engagements,
     partners,
     teamMembers,
+    files: serializedFiles,
   }
 }
 
 export async function importAll(data) {
-  if (!data || data.version !== 1) {
-    throw new Error('Invalid export file: expected version 1')
+  if (!data || (data.version !== 1 && data.version !== 2)) {
+    throw new Error('Invalid export file: expected version 1 or 2')
   }
-  await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, async () => {
-    await Promise.all([
-      db.documents.clear(),
-      db.engagements.clear(),
-      db.partners.clear(),
-      db.teamMembers.clear(),
-    ])
+
+  const fileRecords = data.version === 2 && data.files?.length
+    ? await Promise.all(
+        data.files.map(async (f) => ({
+          id: f.id,
+          name: f.name,
+          mimeType: f.mimeType,
+          size: f.size,
+          parentType: f.parentType,
+          parentId: f.parentId,
+          updatedAt: f.updatedAt,
+          blob: await fileToBuffer(base64ToBlob(f.dataBase64, f.mimeType)),
+        }))
+      )
+    : []
+
+  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files]
+
+  await db.transaction('rw', ...tables, async () => {
+    await Promise.all(tables.map((t) => t.clear()))
+
     await db.documents.bulkPut(data.documents || [])
     await db.engagements.bulkPut(data.engagements || [])
     await db.partners.bulkPut(data.partners || [])
     await db.teamMembers.bulkPut(data.teamMembers || [])
+    if (fileRecords.length) await db.files.bulkPut(fileRecords)
   })
 }
 
@@ -195,63 +344,25 @@ export async function seedIfEmpty() {
     return
   }
 
+  const ts = now()
+
   await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, async () => {
     await db.documents.bulkAdd([
-      {
-        id: uid(),
-        slug: 'strategy',
-        title: 'Company Strategy',
-        body: '# Strategy\n\nDescribe your company direction, priorities, and goals here.\n',
-        updatedAt: now(),
-      },
-      {
-        id: uid(),
-        slug: 'onboarding',
-        title: 'New Hire Onboarding',
-        body: '# Onboarding\n\n1. Set up accounts\n2. Meet the team\n3. Review active engagements\n',
-        updatedAt: now(),
-      },
+      { id: uid(), ...strategyDoc, updatedAt: ts },
+      ...processDocs.map((d) => ({ id: uid(), ...d, updatedAt: ts })),
     ])
 
-    await db.engagements.bulkAdd([
-      {
-        id: uid(),
-        name: 'Example Pilot — Acme Corp',
-        type: 'pilot',
-        partner: 'Acme Corp',
-        status: 'active',
-        stage: 'discovery',
-        owner: 'TBD',
-        startDate: '',
-        nextStep: 'Schedule kickoff',
-        notes: '',
-        updatedAt: now(),
-      },
-    ])
+    await db.engagements.bulkAdd(
+      seedEngagements.map((e) => ({ id: uid(), ...e, updatedAt: ts }))
+    )
 
-    await db.partners.bulkAdd([
-      {
-        id: uid(),
-        name: 'Example Data Provider',
-        kind: 'data provider',
-        contact: '',
-        status: 'active',
-        notes: '',
-        updatedAt: now(),
-      },
-    ])
+    await db.partners.bulkAdd(
+      seedPartners.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
+    )
 
-    await db.teamMembers.bulkAdd([
-      {
-        id: uid(),
-        name: 'Example Member',
-        role: 'Engineer',
-        team: 'Engineering',
-        email: '',
-        notes: '',
-        updatedAt: now(),
-      },
-    ])
+    await db.teamMembers.bulkAdd(
+      seedTeamMembers.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+    )
   })
 
   localStorage.setItem(SEED_KEY, '1')
@@ -259,12 +370,13 @@ export async function seedIfEmpty() {
 
 /** Test helper — wipe all tables */
 export async function clearAll() {
-  await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, async () => {
+  await db.transaction('rw', db.documents, db.engagements, db.partners, db.teamMembers, db.files, async () => {
     await Promise.all([
       db.documents.clear(),
       db.engagements.clear(),
       db.partners.clear(),
       db.teamMembers.clear(),
+      db.files.clear(),
     ])
   })
   localStorage.removeItem(SEED_KEY)

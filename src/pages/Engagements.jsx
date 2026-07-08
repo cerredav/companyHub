@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import EditableTable from '../components/EditableTable'
+import AttachmentList from '../components/AttachmentList'
 import {
   listEngagements,
   saveEngagement,
@@ -12,11 +13,13 @@ import {
 
 const ENGAGEMENT_COLUMNS = [
   { key: 'name', label: 'Name' },
-  { key: 'type', label: 'Type', type: 'select', options: ['pilot', 'contract', 'poc', 'internal'] },
+  { key: 'type', label: 'Type', type: 'select', options: ['pilot', 'contract', 'poc', 'internal', 'prospect'] },
   { key: 'partner', label: 'Partner' },
   { key: 'status', label: 'Status', type: 'select', options: ['active', 'paused', 'completed', 'prospect'] },
   { key: 'stage', label: 'Stage' },
   { key: 'owner', label: 'Owner' },
+  { key: 'poc', label: 'POC' },
+  { key: 'pocContact', label: 'POC Contact' },
   { key: 'startDate', label: 'Start', type: 'date' },
   { key: 'nextStep', label: 'Next Step' },
   { key: 'notes', label: 'Notes', type: 'textarea' },
@@ -32,7 +35,8 @@ const PARTNER_COLUMNS = [
 
 const EMPTY_ENGAGEMENT = {
   name: '', type: 'pilot', partner: '', status: 'active',
-  stage: '', owner: '', startDate: '', nextStep: '', notes: '',
+  stage: '', owner: '', poc: '', pocContact: '',
+  startDate: '', nextStep: '', notes: '',
 }
 
 const EMPTY_PARTNER = {
@@ -47,7 +51,7 @@ export default function Engagements() {
   return (
     <div className="page">
       <h1>Engagements</h1>
-      <p className="subtitle">Track pilots, contracts, and the partners behind them.</p>
+      <p className="subtitle">Track pilots, contracts, POCs, and supporting documents.</p>
 
       <div className="tabs">
         <button
@@ -71,8 +75,16 @@ export default function Engagements() {
           emptyRow={EMPTY_ENGAGEMENT}
           onSave={saveEngagement}
           onDelete={deleteEngagement}
+          rowDetailParentType="engagement"
+          rowDetail={(row) => (
+            <AttachmentList
+              parentType="engagement"
+              parentId={row.id}
+              title="Supporting Documents"
+            />
+          )}
           filterFn={(row, q) =>
-            [row.name, row.partner, row.owner, row.status].some((v) =>
+            [row.name, row.partner, row.owner, row.poc, row.pocContact, row.status].some((v) =>
               String(v).toLowerCase().includes(q.toLowerCase())
             )
           }

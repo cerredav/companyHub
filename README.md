@@ -1,6 +1,6 @@
 # Company Hub
 
-Local-first internal site for consolidating company knowledge: strategy, engagements (pilots), teams, partners, and process documents.
+Local-first internal site for consolidating Larx company knowledge: strategy, engagements (pilots), teams, partners, process documents, and file attachments.
 
 ## Quick start
 
@@ -16,47 +16,50 @@ Open the URL shown (usually `http://localhost:5173`). Default shared password: *
 | Sidebar item | What it holds |
 |---|---|
 | **Home** | Dashboard counts, recent updates, JSON export/import |
-| **Strategy** | Single editable markdown doc for company direction |
-| **Engagements** | Pilots/contracts table + Partners & Data Providers tab |
+| **Strategy** | Editable markdown doc for company direction |
+| **Engagements** | Pilots/contracts with POC, POC contact, supporting documents |
 | **Teams** | Team members with roles, grouped by team |
-| **Processes** | Multiple living process docs (replaces scattered Drive files) |
+| **Processes** | Living process docs + downloadable attachments |
 
-Everything is editable in the UI. No code changes needed to add rows or docs.
+## Seed data
 
-## Data storage
+First-run seed comes from [`src/seed.js`](src/seed.js), populated from Larx internal pipeline notes. The infonet Google Site requires auth — update `seed.js` when infonet changes, then re-import via Home.
 
-All data lives in the browser's **IndexedDB** (via Dexie). It persists across sessions on the same browser/profile.
+To reset and re-seed: clear site data in browser devtools (IndexedDB + localStorage), or import a fresh export.
 
-**Sharing between teammates:** use **Export JSON** on Home, send the file, teammate uses **Import JSON** (replaces their local copy).
+## File attachments
 
-**Backup:** export regularly. IndexedDB can be cleared by browser maintenance or profile resets.
+Upload any file to engagements (Supporting Documents) or processes (Process Documents). Files are stored as blobs in IndexedDB via `src/db.js`. Download from the UI; included in JSON export (v2, base64-encoded).
+
+No upload size cap — large files increase export size.
+
+## Theming
+
+Dark (larx) is default. Toggle **Light mode** / **Dark mode** in the sidebar footer. Preference persists in localStorage.
+
+Styling uses larx design tokens ported from `orion-js-client/styles` (Space Mono, larx blue palette, glassy surfaces).
 
 ## Architecture
 
 ```
 src/db.js          ← single storage seam (swap for API calls later)
-src/App.jsx        ← password gate + sidebar + hash router
+src/seed.js        ← infonet / pipeline seed content
+src/tokens.css     ← larx design tokens (dark + light)
+src/App.jsx        ← password gate, sidebar, theme toggle, hash router
 src/pages/         ← one file per section
-src/components/    ← EditableTable, MarkdownDoc (shared)
+src/components/    ← EditableTable, MarkdownDoc, AttachmentList
 ```
-
-When you're ready for a backend, replace `src/db.js` with fetch calls to your API. Pages and components stay the same.
 
 ## Scripts
 
 ```bash
 npm run dev      # local dev server
 npm run build    # production build → dist/
-npm run preview  # preview production build
-npm test         # vitest (CRUD + export/import)
+npm test         # vitest (CRUD, files, export/import v2)
 ```
 
 ## Limits (MVP)
 
 - Data is per-browser — export/import is the sharing mechanism until a backend exists.
-- Shared password is a UI gate, not real security (data is client-side).
+- Shared password is a UI gate, not real security.
 - No edit history or per-user attribution — deferred to backend phase.
-
-## Password
-
-The shared password is set in `src/App.jsx` (`SHARED_PASSWORD`). Change it there for your team.

@@ -1,6 +1,20 @@
-import { useState } from 'react'
+import { useState, Fragment } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { countFiles } from '../db'
 
 const EMPTY = {}
+
+function FilesButton({ row, parentType, expandedId, onToggle }) {
+  const count = useLiveQuery(() => countFiles(parentType, row.id), [parentType, row.id]) ?? 0
+  return (
+    <button
+      className={`btn btn-sm ${expandedId === row.id ? 'btn-primary' : ''}`}
+      onClick={() => onToggle(row.id)}
+    >
+      Files ({count})
+    </button>
+  )
+}
 
 export default function EditableTable({
   rows,
@@ -9,23 +23,30 @@ export default function EditableTable({
   onDelete,
   emptyRow = EMPTY,
   filterFn,
+  rowDetail,
+  rowDetailParentType,
 }) {
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
   const [filter, setFilter] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
 
   const visible = filterFn && filter
     ? rows.filter((r) => filterFn(r, filter))
     : rows
 
+  const colSpan = columns.length + 1
+
   const startAdd = () => {
     setEditingId('new')
     setDraft({ ...emptyRow })
+    setExpandedId(null)
   }
 
   const startEdit = (row) => {
     setEditingId(row.id)
     setDraft({ ...row })
+    setExpandedId(null)
   }
 
   const cancel = () => {
@@ -42,7 +63,12 @@ export default function EditableTable({
     if (confirm('Delete this item?')) {
       await onDelete(id)
       if (editingId === id) cancel()
+      if (expandedId === id) setExpandedId(null)
     }
+  }
+
+  const toggleExpand = (id) => {
+    setExpandedId((prev) => (prev === id ? null : id))
   }
 
   const setField = (key, value) => {
@@ -53,7 +79,9 @@ export default function EditableTable({
     if (col.render) return col.render(row[col.key], row)
     if (col.type === 'select') {
       return (
-        <span className={`badge badge-${row[col.key]}`}>{row[col.key]}</span>
+        <span className={`badge badge-${String(row[col.key]).replace(/\s+/g, '-')}`}>
+          {row[col.key]}
+        </span>
       )
     }
     return row[col.key] || '—'
@@ -89,6 +117,21 @@ export default function EditableTable({
     )
   }
 
+  const renderActions = (row) => (
+    <td className="actions">
+      {rowDetail && rowDetailParentType && (
+        <FilesButton
+          row={row}
+          parentType={rowDetailParentType}
+          expandedId={expandedId}
+          onToggle={toggleExpand}
+        />
+      )}
+      <button className="btn btn-sm" onClick={() => startEdit(row)}>Edit</button>
+      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row.id)}>Delete</button>
+    </td>
+  )
+
   return (
     <div className="editable-table">
       <div className="table-toolbar">
@@ -123,32 +166,36 @@ export default function EditableTable({
                 </td>
               </tr>
             )}
-            {visible.map((row) =>
-              editingId === row.id ? (
-                <tr key={row.id} className="editing-row">
-                  {columns.map((c) => (
-                    <td key={c.key}>{renderField(c)}</td>
-                  ))}
-                  <td className="actions">
-                    <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
-                    <button className="btn btn-sm" onClick={cancel}>Cancel</button>
-                  </td>
-                </tr>
-              ) : (
-                <tr key={row.id}>
-                  {columns.map((c) => (
-                    <td key={c.key}>{renderCell(c, row)}</td>
-                  ))}
-                  <td className="actions">
-                    <button className="btn btn-sm" onClick={() => startEdit(row)}>Edit</button>
-                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row.id)}>Delete</button>
-                  </td>
-                </tr>
-              )
-            )}
+            {visible.map((row) => (
+              <Fragment key={row.id}>
+                {editingId === row.id ? (
+                  <tr key={row.id} className="editing-row">
+                    {columns.map((c) => (
+                      <td key={c.key}>{renderField(c)}</td>
+                    ))}
+                    <td className="actions">
+                      <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
+                      <button className="btn btn-sm" onClick={cancel}>Cancel</button>
+                    </td>
+                  </tr>
+                ) : (
+                  <tr key={row.id}>
+                    {columns.map((c) => (
+                      <td key={c.key}>{renderCell(c, row)}</td>
+                    ))}
+                    {renderActions(row)}
+                  </tr>
+                )}
+                {rowDetail && expandedId === row.id && editingId !== row.id && (
+                  <tr key={`${row.id}-detail`} className="row-detail">
+                    <td colSpan={colSpan}>{rowDetail(row)}</td>
+                  </tr>
+                )}
+              </Fragment>
+            ))}
             {visible.length === 0 && editingId !== 'new' && (
               <tr>
-                <td colSpan={columns.length + 1} className="empty">No items yet.</td>
+                <td colSpan={colSpan} className="empty">No items yet.</td>
               </tr>
             )}
           </tbody>

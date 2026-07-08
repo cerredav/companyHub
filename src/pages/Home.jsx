@@ -61,6 +61,10 @@ export default function Home() {
           <span className="stat-value">{counts.processDocs ?? '—'}</span>
           <span className="stat-label">Process Docs</span>
         </div>
+        <div className="stat-card">
+          <span className="stat-value">{counts.files ?? '—'}</span>
+          <span className="stat-label">Attachments</span>
+        </div>
       </div>
 
       <div className="home-grid">

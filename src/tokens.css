@@ -1,0 +1,94 @@
+/* Larx design tokens — distilled from orion-js-client/styles/layers/0-tokens.css */
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('/fonts/SpaceMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Space Mono';
+  src: url('/fonts/SpaceMono-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+}
+
+/* Dark (larx) — default */
+:root {
+  --larx-blue: #5185ff;
+  --larx-blue-light: rgba(81, 133, 255, 0.3);
+  --larx-blue-tint: rgba(81, 133, 255, 0.08);
+  --larx-blue-border: rgba(81, 133, 255, 0.35);
+  --larx-green: #4cd137;
+  --larx-green-tint: rgba(76, 209, 55, 0.08);
+  --larx-red: #f44336;
+  --larx-red-tint: rgba(244, 67, 54, 0.08);
+  --larx-orange: #ff9800;
+  --larx-orange-tint: rgba(255, 152, 0, 0.08);
+  --larx-warning: #ffcc00;
+  --larx-success: #4eff4e;
+  --larx-error: #ff5555;
+
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.4);
+
+  --bg-app: #0a0c10;
+  --bg-sidebar: rgba(0, 0, 0, 0.5);
+  --bg-surface: rgba(0, 0, 0, 0.35);
+  --bg-surface-2: rgba(0, 0, 0, 0.5);
+  --bg-surface-hover: rgba(255, 255, 255, 0.06);
+  --bg-input: rgba(0, 0, 0, 0.4);
+
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --border-medium: rgba(255, 255, 255, 0.2);
+
+  --gradient-surface-subtle: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05));
+
+  --font-mono: 'Space Mono', monospace;
+  --font-system: system-ui, -apple-system, sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 8px;
+  --radius-pill: 999px;
+
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --glow-blue: 0 0 8px rgba(81, 133, 255, 0.5);
+
+  --transition-fast: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  --sidebar-w: 220px;
+}
+
+/* Light mode */
+[data-theme='light'] {
+  --text-primary: rgba(10, 14, 24, 0.95);
+  --text-secondary: rgba(10, 14, 24, 0.55);
+  --text-muted: rgba(10, 14, 24, 0.4);
+
+  --bg-app: #eef1f6;
+  --bg-sidebar: #ffffff;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #f4f6fa;
+  --bg-surface-hover: rgba(81, 133, 255, 0.06);
+  --bg-input: #ffffff;
+
+  --border-subtle: rgba(10, 14, 24, 0.1);
+  --border-medium: rgba(10, 14, 24, 0.18);
+
+  --gradient-surface-subtle: linear-gradient(180deg, #ffffff, #f4f6fa);
+  --shadow-md: 0 2px 8px rgba(10, 14, 24, 0.08);
+  --shadow-lg: 0 4px 12px rgba(10, 14, 24, 0.12);
+}
