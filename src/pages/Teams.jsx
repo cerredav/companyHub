@@ -1,13 +1,16 @@
+import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import EditableTable from '../components/EditableTable'
 import MarkdownDoc from '../components/MarkdownDoc'
+import AttachmentList from '../components/AttachmentList'
 import {
   listTeamMembers,
   saveTeamMember,
   deleteTeamMember,
   listEngagements,
-  getDocumentBySlug,
-  saveDocument,
+  listBuckets,
+  saveBucket,
+  deleteBucket,
 } from '../db'
 
 const MEMBER_COLUMNS = [
@@ -20,15 +23,133 @@ const MEMBER_COLUMNS = [
 
 const EMPTY_MEMBER = { name: '', role: '', team: '', email: '', notes: '' }
 
-function teamSlug(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+function LinksEditor({ bucket }) {
+  const [label, setLabel] = useState('')
+  const [url, setUrl] = useState('')
+  const links = bucket.links ?? []
+
+  const addLink = async (e) => {
+    e.preventDefault()
+    if (!url.trim()) return
+    await saveBucket({
+      ...bucket,
+      links: [...links, { label: label.trim() || url.trim(), url: url.trim() }],
+    })
+    setLabel('')
+    setUrl('')
+  }
+
+  const removeLink = async (idx) => {
+    await saveBucket({ ...bucket, links: links.filter((_, i) => i !== idx) })
+  }
+
+  return (
+    <div className="links-editor">
+      <h3 className="bucket-subheading">Links</h3>
+      {links.length === 0 ? (
+        <p className="muted">No links yet.</p>
+      ) : (
+        <ul className="links-list">
+          {links.map((l, idx) => (
+            <li key={idx}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer">{l.label}</a>
+              <button className="btn btn-sm btn-danger" onClick={() => removeLink(idx)}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="link-form" onSubmit={addLink}>
+        <input
+          placeholder="Label (optional)"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
+        <input
+          placeholder="https://…"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        <button className="btn btn-primary btn-sm" type="submit">Add</button>
+      </form>
+    </div>
+  )
+}
+
+function TeamSections({ teamName }) {
+  const buckets = useLiveQuery(() => listBuckets(teamName), [teamName]) ?? []
+  const [activeId, setActiveId] = useState(null)
+  const [newName, setNewName] = useState('')
+
+  const active = buckets.find((b) => b.id === activeId) ?? buckets[0]
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    const name = newName.trim()
+    if (!name) return
+    const bucket = await saveBucket({ team: teamName, name, notes: '', links: [] })
+    setNewName('')
+    setActiveId(bucket.id)
+  }
+
+  const handleDelete = async () => {
+    if (!active || !confirm(`Delete section "${active.name}" and its documents?`)) return
+    await deleteBucket(active.id)
+    setActiveId(null)
+  }
+
+  return (
+    <div className="team-sections">
+      <h2 className="section-heading">Sections</h2>
+      <p className="muted section-note">Notes, documents, and links organized per topic.</p>
+
+      <div className="bucket-bar">
+        <div className="tabs bucket-tabs">
+          {buckets.map((b) => (
+            <button
+              key={b.id}
+              className={`tab ${active?.id === b.id ? 'active' : ''}`}
+              onClick={() => setActiveId(b.id)}
+            >
+              {b.name}
+            </button>
+          ))}
+        </div>
+        <form className="new-doc-form bucket-add" onSubmit={handleCreate}>
+          <input
+            placeholder="New section…"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+          />
+          <button className="btn btn-primary btn-sm" type="submit">Add</button>
+        </form>
+      </div>
+
+      {active ? (
+        <div className="bucket-content">
+          <MarkdownDoc
+            compact
+            title={active.name}
+            body={active.notes || `Notes for ${active.name}.`}
+            onSave={(notes) => saveBucket({ ...active, notes })}
+            onDelete={handleDelete}
+          />
+          <LinksEditor bucket={active} />
+          <AttachmentList
+            parentType="bucket"
+            parentId={active.id}
+            title="Documents"
+          />
+        </div>
+      ) : (
+        <p className="muted">Add a section to organize this team's notes, documents, and links.</p>
+      )}
+    </div>
+  )
 }
 
 function TeamDetail({ teamName }) {
   const members = useLiveQuery(listTeamMembers) ?? []
   const engagements = useLiveQuery(listEngagements) ?? []
-  const slug = `team-${teamSlug(teamName)}`
-  const notesDoc = useLiveQuery(() => getDocumentBySlug(slug), [slug])
 
   const teamMembers = members.filter(
     (m) => (m.team || 'Unassigned') === teamName
@@ -39,16 +160,6 @@ function TeamDetail({ teamName }) {
   const teamEngagements = engagements.filter(
     (e) => e.owner && memberNames.has(e.owner.toLowerCase())
   )
-
-  const defaultNotes = `# ${teamName}\n\nTeam focus, context, and notes.\n`
-
-  const handleSaveNotes = async (body) => {
-    if (notesDoc) {
-      await saveDocument({ ...notesDoc, body })
-    } else {
-      await saveDocument({ slug, title: `${teamName} Team`, body })
-    }
-  }
 
   return (
     <div className="page team-detail">
@@ -100,12 +211,7 @@ function TeamDetail({ teamName }) {
         </div>
       )}
 
-      <MarkdownDoc
-        compact
-        title="Team Notes"
-        body={notesDoc?.body ?? defaultNotes}
-        onSave={handleSaveNotes}
-      />
+      <TeamSections teamName={teamName} />
     </div>
   )
 }
@@ -129,7 +235,7 @@ export default function Teams({ teamName }) {
   return (
     <div className="page">
       <h1>Teams</h1>
-      <p className="subtitle">Team roster — click a team for members, engagements, and notes.</p>
+      <p className="subtitle">Team roster — click a team for members, engagements, and sections.</p>
 
       <h2 className="section-heading">Team Roster</h2>
       <EditableTable

@@ -50,6 +50,17 @@ db.version(4).stores({
   meetings: 'id, date, updatedAt',
 })
 
+db.version(5).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+  meetings: 'id, date, updatedAt',
+  buckets: 'id, team, updatedAt',
+})
+
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
@@ -204,6 +215,24 @@ export async function deleteMeeting(id) {
   await db.meetings.delete(id)
 }
 
+// --- Team buckets (sections holding notes, links, documents) ---
+// record: { id, team, name, notes (markdown), links: [{label, url}], updatedAt }
+
+export async function listBuckets(team) {
+  return db.buckets.where('team').equals(team).sortBy('name')
+}
+
+export async function saveBucket(data) {
+  const record = { links: [], notes: '', ...data, id: data.id || uid(), updatedAt: now() }
+  await db.buckets.put(record)
+  return record
+}
+
+export async function deleteBucket(id) {
+  await deleteFilesForParent('bucket', id)
+  await db.buckets.delete(id)
+}
+
 // --- File attachments ---
 
 export async function listFiles(parentType, parentId) {
@@ -346,7 +375,7 @@ export async function getRecentUpdates(limit = 10) {
 // --- Export / Import ---
 
 export async function exportAll() {
-  const [documents, engagements, partners, teamMembers, files, policies, meetings] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings, buckets] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
@@ -354,6 +383,7 @@ export async function exportAll() {
     db.files.toArray(),
     db.policies.toArray(),
     db.meetings.toArray(),
+    db.buckets.toArray(),
   ])
 
   const serializedFiles = await Promise.all(
@@ -378,6 +408,7 @@ export async function exportAll() {
     teamMembers,
     policies,
     meetings,
+    buckets,
     files: serializedFiles,
   }
 }
@@ -402,7 +433,7 @@ export async function importAll(data) {
       )
     : []
 
-  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies, db.meetings]
+  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies, db.meetings, db.buckets]
 
   await db.transaction('rw', ...tables, async () => {
     await Promise.all(tables.map((t) => t.clear()))
@@ -413,6 +444,7 @@ export async function importAll(data) {
     await db.teamMembers.bulkPut(data.teamMembers || [])
     await db.policies.bulkPut(data.policies || [])
     await db.meetings.bulkPut(data.meetings || [])
+    await db.buckets.bulkPut(data.buckets || [])
     if (fileRecords.length) await db.files.bulkPut(fileRecords)
   })
 }
@@ -539,6 +571,7 @@ export async function clearAll() {
     db.files,
     db.policies,
     db.meetings,
+    db.buckets,
     async () => {
       await Promise.all([
         db.documents.clear(),
@@ -548,6 +581,7 @@ export async function clearAll() {
         db.files.clear(),
         db.policies.clear(),
         db.meetings.clear(),
+        db.buckets.clear(),
       ])
     }
   )

@@ -40,6 +40,7 @@
   --bg-surface-2: rgba(0, 0, 0, 0.5);
   --bg-surface-hover: rgba(255, 255, 255, 0.06);
   --bg-input: rgba(0, 0, 0, 0.4);
+  --bg-solid: #14171f;
 
   --border-subtle: rgba(255, 255, 255, 0.1);
   --border-medium: rgba(255, 255, 255, 0.2);
@@ -84,6 +85,7 @@
   --bg-surface-2: #f4f6fa;
   --bg-surface-hover: rgba(81, 133, 255, 0.06);
   --bg-input: #ffffff;
+  --bg-solid: #f4f6fa;
 
   --border-subtle: rgba(10, 14, 24, 0.1);
   --border-medium: rgba(10, 14, 24, 0.18);

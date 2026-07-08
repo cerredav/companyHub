@@ -377,7 +377,8 @@ input:focus, select:focus, textarea:focus {
 .filter-input { max-width: 240px; }
 
 .table-wrap {
-  overflow-x: auto;
+  overflow: auto;
+  max-height: 65vh;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-xl);
   background: var(--bg-surface);
@@ -396,13 +397,23 @@ th, td {
 }
 
 th {
-  background: var(--bg-surface-2);
+  background: var(--bg-solid);
   color: var(--text-secondary);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 10px;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+td {
+  white-space: nowrap;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 tr:last-child td { border-bottom: none; }
@@ -427,9 +438,14 @@ tr:hover td { background: var(--bg-surface-hover); }
 
 .actions {
   white-space: nowrap;
-  display: flex;
-  gap: var(--space-2);
-  flex-wrap: wrap;
+}
+
+.actions .btn {
+  margin-right: var(--space-2);
+}
+
+.actions .btn:last-child {
+  margin-right: 0;
 }
 
 .empty {
@@ -733,6 +749,80 @@ tr:hover td { background: var(--bg-surface-hover); }
   display: block;
   font-size: 10px;
   color: var(--text-muted);
+}
+
+/* Team sections (buckets) */
+
+.team-sections {
+  margin-top: var(--space-6);
+}
+
+.bucket-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+
+.bucket-tabs {
+  flex: 1;
+  min-width: 200px;
+  margin-bottom: 0;
+  overflow-x: auto;
+}
+
+.bucket-add {
+  margin-bottom: var(--space-1);
+  max-width: 260px;
+}
+
+.bucket-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.bucket-subheading {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-3);
+}
+
+.links-editor {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+}
+
+.links-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+}
+
+.links-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.links-list li:last-child { border-bottom: none; }
+
+.link-form {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.link-form input {
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 700px) {

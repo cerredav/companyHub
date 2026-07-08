@@ -18,6 +18,9 @@ import {
   saveMeeting,
   listMeetings,
   deleteMeeting,
+  saveBucket,
+  listBuckets,
+  deleteBucket,
   addFile,
   listFiles,
   deleteFile,
@@ -88,6 +91,38 @@ describe('meetings', () => {
 
     await deleteMeeting(newer.id)
     expect(await listMeetings()).toHaveLength(1)
+  })
+})
+
+describe('team buckets', () => {
+  it('creates, lists per team, and deletes with file cascade', async () => {
+    const bucket = await saveBucket({ team: 'GTM', name: 'Contracts', notes: '', links: [] })
+    await saveBucket({ team: 'Product', name: 'Roadmap', notes: '', links: [] })
+
+    const gtm = await listBuckets('GTM')
+    expect(gtm).toHaveLength(1)
+    expect(gtm[0].name).toBe('Contracts')
+
+    const file = new File([new Blob(['doc'])], 'contract.pdf', { type: 'application/pdf' })
+    await addFile('bucket', bucket.id, file)
+    expect(await listFiles('bucket', bucket.id)).toHaveLength(1)
+
+    await deleteBucket(bucket.id)
+    expect(await listBuckets('GTM')).toHaveLength(0)
+    expect(await listFiles('bucket', bucket.id)).toHaveLength(0)
+  })
+
+  it('stores links array', async () => {
+    const bucket = await saveBucket({
+      team: 'GTM',
+      name: 'Refs',
+      notes: '',
+      links: [{ label: 'Drive', url: 'https://drive.google.com' }],
+    })
+    const [saved] = await listBuckets('GTM')
+    expect(saved.links).toHaveLength(1)
+    expect(saved.links[0].url).toBe('https://drive.google.com')
+    void bucket
   })
 })
 
@@ -169,6 +204,7 @@ describe('export / import', () => {
     await saveTeamMember({ name: 'T1', role: '', team: '', email: '', notes: '' })
     await savePolicy({ name: 'Handbook', lastUpdated: '2026', link: 'https://x.com', notes: '' })
     await saveMeeting({ title: 'M1', date: '2026-06-01', attendees: '', link: '', summary: 's' })
+    await saveBucket({ team: 'GTM', name: 'B1', notes: 'n', links: [] })
     const file = new File([new Blob(['attach'])], 'a.txt', { type: 'text/plain' })
     await addFile('engagement', eng.id, file)
 
@@ -177,6 +213,7 @@ describe('export / import', () => {
     expect(exported.files).toHaveLength(1)
     expect(exported.policies).toHaveLength(1)
     expect(exported.meetings).toHaveLength(1)
+    expect(exported.buckets).toHaveLength(1)
 
     await clearAll()
     await importAll(exported)
@@ -188,6 +225,7 @@ describe('export / import', () => {
     expect(counts.files).toBe(1)
     expect(counts.policies).toBe(1)
     expect(counts.meetings).toBe(1)
+    expect(await listBuckets('GTM')).toHaveLength(1)
   })
 
   it('imports v1 exports without files or policies', async () => {
