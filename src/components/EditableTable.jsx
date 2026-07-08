@@ -1,17 +1,26 @@
 import { useState, Fragment } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { countFiles } from '../db'
+import { countFiles, countActivities, countMeetingsFor } from '../db'
 
 const EMPTY = {}
 
-function FilesButton({ row, parentType, expandedId, onToggle }) {
-  const count = useLiveQuery(() => countFiles(parentType, row.id), [parentType, row.id]) ?? 0
+function DetailButton({ row, parentType, expandedId, onToggle }) {
+  const fileCount = useLiveQuery(() => countFiles(parentType, row.id), [parentType, row.id]) ?? 0
+  const activityCount = useLiveQuery(() => countActivities(parentType, row.id), [parentType, row.id]) ?? 0
+  const meetingCount = useLiveQuery(() => countMeetingsFor(parentType, row.id), [parentType, row.id]) ?? 0
+  const parts = []
+  if (activityCount) parts.push(`${activityCount} update${activityCount !== 1 ? 's' : ''}`)
+  if (meetingCount) parts.push(`${meetingCount} meeting${meetingCount !== 1 ? 's' : ''}`)
+  if (fileCount) parts.push(`${fileCount} file${fileCount !== 1 ? 's' : ''}`)
+  const label = parts.length ? `History · ${parts.join(', ')}` : 'History'
+
   return (
     <button
       className={`btn btn-sm ${expandedId === row.id ? 'btn-primary' : ''}`}
       onClick={() => onToggle(row.id)}
+      title="Updates, activity timeline, and documents"
     >
-      Files ({count})
+      {label}
     </button>
   )
 }
@@ -25,6 +34,7 @@ export default function EditableTable({
   filterFn,
   rowDetail,
   rowDetailParentType,
+  hideRowEdit = false,
 }) {
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
@@ -87,6 +97,11 @@ export default function EditableTable({
     return row[col.key] || '—'
   }
 
+  const renderEditCell = (col) => {
+    if (col.editRender) return col.editRender(draft, setField)
+    return renderField(col)
+  }
+
   const renderField = (col) => {
     const val = draft[col.key] ?? ''
     if (col.type === 'select') {
@@ -120,14 +135,16 @@ export default function EditableTable({
   const renderActions = (row) => (
     <td className="actions">
       {rowDetail && rowDetailParentType && (
-        <FilesButton
+        <DetailButton
           row={row}
           parentType={rowDetailParentType}
           expandedId={expandedId}
           onToggle={toggleExpand}
         />
       )}
-      <button className="btn btn-sm" onClick={() => startEdit(row)}>Edit</button>
+      {!hideRowEdit && (
+        <button className="btn btn-sm" onClick={() => startEdit(row)}>Edit</button>
+      )}
       <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row.id)}>Delete</button>
     </td>
   )
@@ -158,7 +175,7 @@ export default function EditableTable({
             {editingId === 'new' && (
               <tr className="editing-row">
                 {columns.map((c) => (
-                  <td key={c.key}>{renderField(c)}</td>
+                  <td key={c.key}>{renderEditCell(c)}</td>
                 ))}
                 <td className="actions">
                   <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
@@ -171,7 +188,7 @@ export default function EditableTable({
                 {editingId === row.id ? (
                   <tr key={row.id} className="editing-row">
                     {columns.map((c) => (
-                      <td key={c.key}>{renderField(c)}</td>
+                      <td key={c.key}>{renderEditCell(c)}</td>
                     ))}
                     <td className="actions">
                       <button className="btn btn-primary btn-sm" onClick={save}>Save</button>

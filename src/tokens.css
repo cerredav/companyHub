@@ -71,6 +71,8 @@
 
   --transition-fast: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   --sidebar-w: 220px;
+  /* ponytail: viewport-based content width — avoids fixed px cap clipping tables */
+  --content-w: calc(100dvw - var(--sidebar-w) - 2 * var(--space-8));
 }
 
 /* Light mode */

@@ -8,12 +8,15 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "postinstall": "node scripts/patch-pptx-browser.js"
   },
   "dependencies": {
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
     "marked": "^18.0.5",
+    "pdfjs-dist": "^5.7.284",
+    "pptx-browser": "^4.1.5",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

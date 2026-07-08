@@ -11,6 +11,7 @@ import {
   isReservedSlug,
   topUpProcessDocs,
   meetings as seedMeetings,
+  agreements as seedAgreements,
 } from './seed.js'
 
 // ponytail: single storage seam — swap this module for API calls when backend exists
@@ -59,6 +60,31 @@ db.version(5).stores({
   policies: 'id, name, updatedAt',
   meetings: 'id, date, updatedAt',
   buckets: 'id, team, updatedAt',
+})
+
+db.version(6).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+  meetings: 'id, date, updatedAt',
+  buckets: 'id, team, updatedAt',
+  agreements: 'id, partner, updatedAt',
+})
+
+db.version(7).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+  meetings: 'id, date, updatedAt',
+  buckets: 'id, team, updatedAt',
+  agreements: 'id, partner, updatedAt',
+  activities: 'id, [parentType+parentId], createdAt',
 })
 
 const uid = () => crypto.randomUUID()
@@ -134,20 +160,129 @@ export async function deleteDocument(id) {
   await db.documents.delete(id)
 }
 
+// --- Activity log (engagements + partners) ---
+
+const ACTIVITY_PARENTS = new Set(['engagement', 'partner'])
+const SKIP_DIFF_KEYS = new Set(['id', 'updatedAt'])
+
+function displayVal(val) {
+  if (val == null || val === '') return '—'
+  if (Array.isArray(val)) return val.length ? val.join(', ') : '—'
+  return String(val)
+}
+
+async function partnerNamesForIds(ids) {
+  if (!ids?.length) return '—'
+  const partners = await db.partners.toArray()
+  const byId = new Map(partners.map((p) => [p.id, p.name]))
+  return ids.map((id) => byId.get(id) || id).join(', ') || '—'
+}
+
+async function normalizeForDiff(record, parentType) {
+  if (!record) return null
+  const copy = { ...record }
+  if (parentType === 'engagement' && copy.partnerIds) {
+    copy.partnerIds = await partnerNamesForIds(copy.partnerIds)
+  }
+  return copy
+}
+
+async function diffRecord(parentType, prev, next) {
+  const [a, b] = await Promise.all([
+    normalizeForDiff(prev, parentType),
+    normalizeForDiff(next, parentType),
+  ])
+  const keys = new Set([...Object.keys(a || {}), ...Object.keys(b || {})])
+  const parts = []
+
+  for (const key of keys) {
+    if (SKIP_DIFF_KEYS.has(key)) continue
+    const oldVal = displayVal(a?.[key])
+    const newVal = displayVal(b?.[key])
+    if (oldVal !== newVal) parts.push(`${key}: ${oldVal} → ${newVal}`)
+  }
+
+  return parts.join(' · ')
+}
+
+export async function listActivities(parentType, parentId) {
+  const items = await db.activities
+    .where('[parentType+parentId]')
+    .equals([parentType, parentId])
+    .toArray()
+  return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export async function addActivity({ parentType, parentId, kind, text, author = '', createdAt }) {
+  const record = {
+    id: uid(),
+    parentType,
+    parentId,
+    kind,
+    text,
+    author,
+    createdAt: createdAt || now(),
+  }
+  await db.activities.add(record)
+  return record
+}
+
+export async function deleteActivity(id) {
+  await db.activities.delete(id)
+}
+
+/** Update a manual note — kind/parent fields are immutable */
+export async function saveActivity({ id, text, author = '', createdAt }) {
+  const existing = await db.activities.get(id)
+  if (!existing || existing.kind !== 'note') {
+    throw new Error('Only manual notes can be edited')
+  }
+  const record = {
+    ...existing,
+    text,
+    author,
+    createdAt: createdAt || existing.createdAt,
+  }
+  await db.activities.put(record)
+  return record
+}
+
+async function deleteActivitiesForParent(parentType, parentId) {
+  const items = await listActivities(parentType, parentId)
+  await db.activities.bulkDelete(items.map((a) => a.id))
+}
+
+async function logChangeIfNeeded(parentType, parentId, prev, next) {
+  const text = await diffRecord(parentType, prev, next)
+  if (!text) return
+  await addActivity({ parentType, parentId, kind: 'change', text })
+}
+
 // --- Engagements ---
 
 export async function listEngagements() {
   return db.engagements.orderBy('updatedAt').reverse().toArray()
 }
 
-export async function saveEngagement(data) {
-  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+export async function saveEngagement(data, { logActivity = true } = {}) {
+  const prev = data.id ? await db.engagements.get(data.id) : null
+  const record = {
+    ...data,
+    id: data.id || uid(),
+    partnerIds: data.partnerIds ?? [],
+    updatedAt: now(),
+  }
   await db.engagements.put(record)
+  if (logActivity && prev) {
+    await logChangeIfNeeded('engagement', record.id, prev, record)
+  }
   return record
 }
 
 export async function deleteEngagement(id) {
   await deleteFilesForParent('engagement', id)
+  await deleteActivitiesForParent('engagement', id)
+  await stripMeetingLinks('engagement', id)
   await db.engagements.delete(id)
 }
 
@@ -157,14 +292,51 @@ export async function listPartners() {
   return db.partners.orderBy('name').toArray()
 }
 
-export async function savePartner(data) {
-  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+export async function savePartner(data, { logActivity = true } = {}) {
+  const prev = data.id ? await db.partners.get(data.id) : null
+  const record = { owner: '', ...data, id: data.id || uid(), updatedAt: now() }
   await db.partners.put(record)
+  if (logActivity && prev) {
+    await logChangeIfNeeded('partner', record.id, prev, record)
+  }
   return record
 }
 
 export async function deletePartner(id) {
+  await deleteFilesForParent('partner', id)
+  await deleteActivitiesForParent('partner', id)
+  const engagements = await db.engagements.toArray()
+  for (const eng of engagements) {
+    if (!eng.partnerIds?.includes(id)) continue
+    await saveEngagement({
+      ...eng,
+      partnerIds: eng.partnerIds.filter((pid) => pid !== id),
+    }, { logActivity: false })
+  }
+  await stripMeetingLinks('partner', id)
   await db.partners.delete(id)
+}
+
+/** One-shot: link legacy engagement.partner text to partner records by name */
+export async function linkEngagementsByName() {
+  const [engagements, partners] = await Promise.all([
+    db.engagements.toArray(),
+    db.partners.toArray(),
+  ])
+  const byName = new Map(partners.map((p) => [p.name.trim().toLowerCase(), p.id]))
+  let updated = 0
+
+  for (const eng of engagements) {
+    if (eng.partnerIds?.length) continue
+    const text = (eng.partner || '').trim()
+    if (!text) continue
+    const partnerId = byName.get(text.toLowerCase())
+    if (!partnerId) continue
+    await saveEngagement({ ...eng, partnerIds: [partnerId] }, { logActivity: false })
+    updated++
+  }
+
+  return updated
 }
 
 // --- Team members ---
@@ -174,7 +346,13 @@ export async function listTeamMembers() {
 }
 
 export async function saveTeamMember(data) {
-  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  const record = {
+    location: '',
+    timezone: '',
+    ...data,
+    id: data.id || uid(),
+    updatedAt: now(),
+  }
   await db.teamMembers.put(record)
   return record
 }
@@ -185,17 +363,49 @@ export async function deleteTeamMember(id) {
 
 // --- Policies ---
 
+function formatPolicyDate(iso) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function policyLastActivityAt(policy, files = []) {
+  let latest = policy.updatedAt || ''
+  for (const f of files) {
+    if (f.updatedAt > latest) latest = f.updatedAt
+  }
+  return latest
+}
+
 export async function listPolicies() {
-  return db.policies.orderBy('name').toArray()
+  const [policies, policyFiles] = await Promise.all([
+    db.policies.orderBy('name').toArray(),
+    db.files.where('parentType').equals('policy').toArray(),
+  ])
+  const filesByPolicy = new Map()
+  for (const f of policyFiles) {
+    const list = filesByPolicy.get(f.parentId) || []
+    list.push(f)
+    filesByPolicy.set(f.parentId, list)
+  }
+  return policies.map((p) => ({
+    ...p,
+    lastUpdated: formatPolicyDate(policyLastActivityAt(p, filesByPolicy.get(p.id) || [])),
+  }))
 }
 
 export async function savePolicy(data) {
-  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  const { link: _link, lastUpdated: _lastUpdated, ...rest } = data
+  const record = { ...rest, id: data.id || uid(), updatedAt: now() }
   await db.policies.put(record)
   return record
 }
 
 export async function deletePolicy(id) {
+  await deleteFilesForParent('policy', id)
   await db.policies.delete(id)
 }
 
@@ -206,13 +416,79 @@ export async function listMeetings() {
 }
 
 export async function saveMeeting(data) {
-  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  const record = {
+    ...data,
+    id: data.id || uid(),
+    engagementIds: data.engagementIds ?? [],
+    partnerIds: data.partnerIds ?? [],
+    updatedAt: now(),
+  }
   await db.meetings.put(record)
   return record
 }
 
 export async function deleteMeeting(id) {
   await db.meetings.delete(id)
+}
+
+const MEETING_LINK_KEY = { engagement: 'engagementIds', partner: 'partnerIds' }
+
+async function stripMeetingLinks(parentType, parentId) {
+  const key = MEETING_LINK_KEY[parentType]
+  const meetings = await db.meetings.toArray()
+  for (const m of meetings) {
+    if (!m[key]?.includes(parentId)) continue
+    await saveMeeting({ ...m, [key]: m[key].filter((id) => id !== parentId) })
+  }
+}
+
+export async function listMeetingsFor(parentType, parentId) {
+  const key = MEETING_LINK_KEY[parentType]
+  const meetings = await db.meetings.toArray()
+  return meetings
+    .filter((m) => m[key]?.includes(parentId))
+    .sort((a, b) => b.date.localeCompare(a.date))
+}
+
+export async function countMeetingsFor(parentType, parentId) {
+  const key = MEETING_LINK_KEY[parentType]
+  const meetings = await db.meetings.toArray()
+  return meetings.filter((m) => m[key]?.includes(parentId)).length
+}
+
+export async function linkMeeting(meetingId, parentType, parentId) {
+  const meeting = await db.meetings.get(meetingId)
+  if (!meeting) throw new Error('Meeting not found')
+  const key = MEETING_LINK_KEY[parentType]
+  const ids = meeting[key] ?? []
+  if (ids.includes(parentId)) return meeting
+  return saveMeeting({ ...meeting, [key]: [...ids, parentId] })
+}
+
+export async function unlinkMeeting(meetingId, parentType, parentId) {
+  const meeting = await db.meetings.get(meetingId)
+  if (!meeting) return null
+  const key = MEETING_LINK_KEY[parentType]
+  return saveMeeting({
+    ...meeting,
+    [key]: (meeting[key] ?? []).filter((id) => id !== parentId),
+  })
+}
+
+// --- Agreements (MNDA / partner agreement tracker) ---
+
+export async function listAgreements() {
+  return db.agreements.orderBy('partner').toArray()
+}
+
+export async function saveAgreement(data) {
+  const record = { ...data, id: data.id || uid(), updatedAt: now() }
+  await db.agreements.put(record)
+  return record
+}
+
+export async function deleteAgreement(id) {
+  await db.agreements.delete(id)
 }
 
 // --- Team buckets (sections holding notes, links, documents) ---
@@ -250,6 +526,13 @@ export async function countFiles(parentType, parentId) {
     .count()
 }
 
+export async function countActivities(parentType, parentId) {
+  return db.activities
+    .where('[parentType+parentId]')
+    .equals([parentType, parentId])
+    .count()
+}
+
 async function fileToBuffer(file) {
   if (typeof file.arrayBuffer === 'function') return file.arrayBuffer()
   return new Promise((resolve, reject) => {
@@ -273,6 +556,17 @@ export async function addFile(parentType, parentId, file) {
     updatedAt: now(),
   }
   await db.files.add(record)
+  if (parentType === 'policy') {
+    await db.policies.update(parentId, { updatedAt: now() })
+  }
+  if (ACTIVITY_PARENTS.has(parentType)) {
+    await addActivity({
+      parentType,
+      parentId,
+      kind: 'file',
+      text: `Uploaded "${file.name}"`,
+    })
+  }
   return normalizeFile(record)
 }
 
@@ -298,7 +592,7 @@ export function downloadFile(record) {
 // --- Dashboard helpers ---
 
 export async function getCounts() {
-  const [documents, engagements, partners, teamMembers, files, policies, meetings] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings, agreements] = await Promise.all([
     db.documents.count(),
     db.engagements.count(),
     db.partners.count(),
@@ -306,9 +600,10 @@ export async function getCounts() {
     db.files.count(),
     db.policies.count(),
     db.meetings.count(),
+    db.agreements.count(),
   ])
   const processDocs = (await listProcessDocuments()).length
-  return { documents, processDocs, engagements, partners, teamMembers, files, policies, meetings }
+  return { documents, processDocs, engagements, partners, teamMembers, files, policies, meetings, agreements }
 }
 
 export async function getRecentUpdates(limit = 10) {
@@ -375,7 +670,7 @@ export async function getRecentUpdates(limit = 10) {
 // --- Export / Import ---
 
 export async function exportAll() {
-  const [documents, engagements, partners, teamMembers, files, policies, meetings, buckets] = await Promise.all([
+  const [documents, engagements, partners, teamMembers, files, policies, meetings, buckets, agreements, activities] = await Promise.all([
     db.documents.toArray(),
     db.engagements.toArray(),
     db.partners.toArray(),
@@ -384,6 +679,8 @@ export async function exportAll() {
     db.policies.toArray(),
     db.meetings.toArray(),
     db.buckets.toArray(),
+    db.agreements.toArray(),
+    db.activities.toArray(),
   ])
 
   const serializedFiles = await Promise.all(
@@ -409,6 +706,8 @@ export async function exportAll() {
     policies,
     meetings,
     buckets,
+    agreements,
+    activities,
     files: serializedFiles,
   }
 }
@@ -433,7 +732,7 @@ export async function importAll(data) {
       )
     : []
 
-  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies, db.meetings, db.buckets]
+  const tables = [db.documents, db.engagements, db.partners, db.teamMembers, db.files, db.policies, db.meetings, db.buckets, db.agreements, db.activities]
 
   await db.transaction('rw', ...tables, async () => {
     await Promise.all(tables.map((t) => t.clear()))
@@ -445,6 +744,8 @@ export async function importAll(data) {
     await db.policies.bulkPut(data.policies || [])
     await db.meetings.bulkPut(data.meetings || [])
     await db.buckets.bulkPut(data.buckets || [])
+    await db.agreements.bulkPut(data.agreements || [])
+    await db.activities.bulkPut(data.activities || [])
     if (fileRecords.length) await db.files.bulkPut(fileRecords)
   })
 }
@@ -452,9 +753,14 @@ export async function importAll(data) {
 // --- Seeding ---
 
 const SEED_KEY = 'companyHubSeeded'
-const TOPUP_KEY = 'companyHubTopUpV5'
+const TOPUP_KEY = 'companyHubTopUpV6'
 const TOPUP_V3_KEY = 'companyHubTopUpV3'
 const TOPUP_V4_KEY = 'companyHubTopUpV4'
+const TOPUP_V5_KEY = 'companyHubTopUpV5'
+const LINK_V7_KEY = 'companyHubLinkV7'
+const AGREEMENT_LINK_V8_KEY = 'companyHubAgreementLinkV8'
+const AGREEMENT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1RmbSPj0g_Fk5fkl9RujUcFRyDZB0Vku3KwIz7uZRxWc/edit'
+const AGREEMENT_TAB_LINK = '#engagements/agreements'
 
 export async function seedIfEmpty() {
   if (localStorage.getItem(SEED_KEY)) return
@@ -475,6 +781,7 @@ export async function seedIfEmpty() {
     db.teamMembers,
     db.policies,
     db.meetings,
+    db.agreements,
     async () => {
       await db.documents.bulkAdd([
         { id: uid(), ...strategyDoc, updatedAt: ts },
@@ -501,6 +808,10 @@ export async function seedIfEmpty() {
       await db.meetings.bulkAdd(
         seedMeetings.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
       )
+
+      await db.agreements.bulkAdd(
+        seedAgreements.map((a) => ({ id: uid(), ...a, updatedAt: ts }))
+      )
     }
   )
 
@@ -508,6 +819,33 @@ export async function seedIfEmpty() {
   localStorage.setItem(TOPUP_KEY, '1')
   localStorage.setItem(TOPUP_V3_KEY, '1')
   localStorage.setItem(TOPUP_V4_KEY, '1')
+  localStorage.setItem(TOPUP_V5_KEY, '1')
+
+  await linkEngagementsByName()
+  localStorage.setItem(LINK_V7_KEY, '1')
+}
+
+/** One-shot: link legacy partner text on existing installs */
+export async function migratePartnerLinks() {
+  if (localStorage.getItem(LINK_V7_KEY)) return
+  await linkEngagementsByName()
+  localStorage.setItem(LINK_V7_KEY, '1')
+}
+
+/** One-shot: point Agreement Dashboard links at Engagements → Agreement Tracker tab */
+export async function migrateAgreementDashboardLinks() {
+  if (localStorage.getItem(AGREEMENT_LINK_V8_KEY)) return
+
+  const docs = await db.documents.toArray()
+  for (const doc of docs) {
+    if (!doc.body?.includes(AGREEMENT_SHEET_URL)) continue
+    await saveDocument({
+      ...doc,
+      body: doc.body.replaceAll(AGREEMENT_SHEET_URL, AGREEMENT_TAB_LINK),
+    })
+  }
+
+  localStorage.setItem(AGREEMENT_LINK_V8_KEY, '1')
 }
 
 /** One-shot top-up for existing installs — never overwrites user edits */
@@ -551,9 +889,19 @@ export async function seedNewContent() {
   }
 
   // v5 top-up — seed meetings if table empty
-  if ((await db.meetings.count()) === 0) {
-    await db.meetings.bulkAdd(
-      seedMeetings.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+  if (!localStorage.getItem(TOPUP_V5_KEY)) {
+    if ((await db.meetings.count()) === 0) {
+      await db.meetings.bulkAdd(
+        seedMeetings.map((m) => ({ id: uid(), ...m, updatedAt: ts }))
+      )
+    }
+    localStorage.setItem(TOPUP_V5_KEY, '1')
+  }
+
+  // v6 top-up — seed agreements if table empty
+  if ((await db.agreements.count()) === 0) {
+    await db.agreements.bulkAdd(
+      seedAgreements.map((a) => ({ id: uid(), ...a, updatedAt: ts }))
     )
   }
 
@@ -572,6 +920,8 @@ export async function clearAll() {
     db.policies,
     db.meetings,
     db.buckets,
+    db.agreements,
+    db.activities,
     async () => {
       await Promise.all([
         db.documents.clear(),
@@ -582,10 +932,16 @@ export async function clearAll() {
         db.policies.clear(),
         db.meetings.clear(),
         db.buckets.clear(),
+        db.agreements.clear(),
+        db.activities.clear(),
       ])
     }
   )
   localStorage.removeItem(SEED_KEY)
   localStorage.removeItem(TOPUP_KEY)
   localStorage.removeItem(TOPUP_V3_KEY)
+  localStorage.removeItem(TOPUP_V4_KEY)
+  localStorage.removeItem(TOPUP_V5_KEY)
+  localStorage.removeItem(LINK_V7_KEY)
+  localStorage.removeItem(AGREEMENT_LINK_V8_KEY)
 }

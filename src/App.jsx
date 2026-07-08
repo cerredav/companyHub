@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { seedIfEmpty, seedNewContent } from './db'
+import { seedIfEmpty, seedNewContent, migratePartnerLinks, migrateAgreementDashboardLinks } from './db'
 import Home from './pages/Home'
 import Strategy from './pages/Strategy'
 import Engagements from './pages/Engagements'
@@ -93,6 +93,8 @@ export default function App() {
   useEffect(() => {
     seedIfEmpty()
       .then(() => seedNewContent())
+      .then(() => migratePartnerLinks())
+      .then(() => migrateAgreementDashboardLinks())
       .then(() => setReady(true))
   }, [])
 
@@ -111,15 +113,24 @@ export default function App() {
   const teamName = routeBase === 'teams' && params[0]
     ? decodeURIComponent(params[0])
     : null
+  const meetingId = routeBase === 'meetings' && params[0]
+    ? decodeURIComponent(params[0])
+    : null
+  const engagementTab = routeBase === 'engagements' && params[0]
+    ? decodeURIComponent(params[0])
+    : null
+  const policyId = routeBase === 'policies' && params[0]
+    ? decodeURIComponent(params[0])
+    : null
 
   let page
   switch (routeBase) {
     case 'home': page = <Home />; break
     case 'strategy': page = <Strategy />; break
-    case 'engagements': page = <Engagements />; break
+    case 'engagements': page = <Engagements tab={engagementTab} />; break
     case 'teams': page = <Teams teamName={teamName} />; break
-    case 'meetings': page = <Meetings />; break
-    case 'policies': page = <Policies />; break
+    case 'meetings': page = <Meetings meetingId={meetingId} />; break
+    case 'policies': page = <Policies policyId={policyId} />; break
     case 'processes': page = <Processes />; break
     default: page = <Home />
   }
@@ -127,7 +138,10 @@ export default function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="sidebar-brand">Larx Hub</div>
+        <div className="sidebar-brand">
+          <img src="/favicon.svg" alt="" className="sidebar-brand-icon" aria-hidden />
+          Larx Hub
+        </div>
         <nav>
           {NAV.map((item) => (
             <a

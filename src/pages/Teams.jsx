@@ -18,10 +18,44 @@ const MEMBER_COLUMNS = [
   { key: 'role', label: 'Role' },
   { key: 'team', label: 'Team' },
   { key: 'email', label: 'Email' },
+  { key: 'location', label: 'Location' },
+  { key: 'timezone', label: 'Timezone' },
   { key: 'notes', label: 'Notes', type: 'textarea' },
 ]
 
-const EMPTY_MEMBER = { name: '', role: '', team: '', email: '', notes: '' }
+const EMPTY_MEMBER = {
+  name: '', role: '', team: '', email: '', location: '', timezone: '', notes: '',
+}
+
+function formatLocalTime(timezone) {
+  if (!timezone) return null
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    }).format(new Date())
+  } catch {
+    return null
+  }
+}
+
+function MemberMeta({ member }) {
+  const localTime = formatLocalTime(member.timezone)
+  return (
+    <>
+      {member.role && <span className="muted"> — {member.role}</span>}
+      {member.location && <span className="muted"> · {member.location}</span>}
+      {member.timezone && (
+        <span className="muted">
+          {' · '}{member.timezone}{localTime ? ` (${localTime})` : ''}
+        </span>
+      )}
+      {member.email && <span className="muted"> · {member.email}</span>}
+    </>
+  )
+}
 
 function LinksEditor({ bucket }) {
   const [label, setLabel] = useState('')
@@ -175,8 +209,7 @@ function TeamDetail({ teamName }) {
           {teamMembers.map((m) => (
             <li key={m.id}>
               <strong>{m.name}</strong>
-              {m.role && <span className="muted"> — {m.role}</span>}
-              {m.email && <span className="muted"> · {m.email}</span>}
+              <MemberMeta member={m} />
             </li>
           ))}
         </ul>
@@ -245,7 +278,7 @@ export default function Teams({ teamName }) {
         onSave={saveTeamMember}
         onDelete={deleteTeamMember}
         filterFn={(row, q) =>
-          [row.name, row.role, row.team, row.email].some((v) =>
+          [row.name, row.role, row.team, row.email, row.location, row.timezone].some((v) =>
             String(v).toLowerCase().includes(q.toLowerCase())
           )
         }
@@ -266,7 +299,8 @@ export default function Teams({ teamName }) {
                   {byTeam[team].map((m) => (
                     <li key={m.id}>
                       <strong>{m.name}</strong>
-                      {m.role && <span className="muted"> — {m.role}</span>}
+                      {m.location && <span className="muted"> · {m.location}</span>}
+                      {m.timezone && <span className="muted"> · {m.timezone}</span>}
                     </li>
                   ))}
                 </ul>
