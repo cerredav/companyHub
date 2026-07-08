@@ -15,10 +15,10 @@ Open the URL shown (usually `http://localhost:5173`). Default shared password: *
 
 | Sidebar item | What it holds |
 |---|---|
-| **Home** | Dashboard counts, recent updates, JSON export/import |
-| **Strategy** | Editable markdown doc for company direction |
+| **Home** | Company purpose & offices, curated quick links, dashboard counts, export/import |
+| **Strategy** | Five strategy pillars with deck links (from infonet) |
 | **Engagements** | Pilots/contracts with POC, POC contact, supporting documents |
-| **Teams** | Team members with roles, grouped by team |
+| **Teams** | Team roster + **Policies** (handbook, travel, holidays, etc.) |
 | **Processes** | Living process docs + downloadable attachments |
 
 ## Seed data
