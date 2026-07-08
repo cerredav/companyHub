@@ -656,6 +656,47 @@ tr:hover td { background: var(--bg-surface-hover); }
   font-size: 11px;
 }
 
+.team-card--link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.team-card--link:hover {
+  border-color: var(--larx-blue-border);
+  background: var(--larx-blue-tint);
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: var(--space-4);
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.back-link:hover {
+  color: var(--larx-blue);
+}
+
+.member-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-6);
+}
+
+.member-list li {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 12px;
+}
+
+.team-detail .table-wrap {
+  margin-bottom: var(--space-6);
+}
+
 @media (max-width: 700px) {
   .app { flex-direction: column; }
   .sidebar {

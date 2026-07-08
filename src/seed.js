@@ -102,6 +102,10 @@ export const homeDocs = [companyInfoDoc, quickLinksDoc]
 
 export const RESERVED_SLUGS = new Set(['strategy', 'company-info', 'quick-links'])
 
+export function isReservedSlug(slug) {
+  return RESERVED_SLUGS.has(slug) || slug.startsWith('team-')
+}
+
 export const processDocs = [
   {
     slug: 'onboarding',
@@ -167,7 +171,81 @@ Prepare sliding scale pricing (5–100 licenses) before customer meetings.
 - [ ] Timeline documented in engagement notes
 `,
   },
+  {
+    slug: 'mnda',
+    title: 'MNDA',
+    body: `# MNDA Process
+
+Use when a prospect or partner needs a mutual NDA before sharing materials.
+
+1. Log the request in the [Agreement Dashboard](https://docs.google.com/spreadsheets/d/1RmbSPj0g_Fk5fkl9RujUcFRyDZB0Vku3KwIz7uZRxWc/edit)
+2. Send Larx standard MNDA (see Sales Process & Assets)
+3. Update status when signed
+`,
+  },
+  {
+    slug: 'partnerships',
+    title: 'Partnerships',
+    body: `# Partnership Agreements
+
+For formal partnership or reseller agreements.
+
+1. Qualify the partner — align with GTM lead
+2. Track in the [Agreement Dashboard](https://docs.google.com/spreadsheets/d/1RmbSPj0g_Fk5fkl9RujUcFRyDZB0Vku3KwIz7uZRxWc/edit)
+3. Legal review before signature
+4. Add partner to Engagements → Partners tab once active
+`,
+  },
+  {
+    slug: 'demos',
+    title: 'Demos',
+    body: `# Demo Process
+
+## Request & schedule
+
+- Confirm POC, attendees, and use case with sales lead
+- See **Engagement Demo Prep** for the runbook
+
+## After the demo
+
+- Submit feedback via the [Demo Feedback Form](https://forms.gle/HYc56mQF1iUMEdKz8)
+- Log next steps in Larx Hub Engagements within 24h
+`,
+  },
+  {
+    slug: 'pilots',
+    title: 'Pilots',
+    body: `# Pilot Programs
+
+## Tracking
+
+- Master list: [Pilot Programs sheet](https://docs.google.com/spreadsheets/d/1R9OaACKjdDbQoD_hNpFXclV9xwKqpo8NGMVUne1Fruc/edit)
+- Operational detail: Larx Hub → **Engagements** (status, POC, next step, attachments)
+
+## Lifecycle
+
+1. Qualify → log as prospect engagement
+2. MNDA signed → move to active pilot
+3. Weekly updates in HubSpot and Engagements
+4. Close → completed or paused with notes
+`,
+  },
+  {
+    slug: 'time-off-request',
+    title: 'Time Off Request',
+    body: `# Time Off Request
+
+1. Submit via the [Time Off Request Form](https://docs.google.com/forms/d/e/1FAIpQLScgV0Owf2Vex-D9uQwG8tP12ZKbBcVPMYcCblSBltthCk6img/viewform)
+2. Approvals: Tad
+3. Block calendar and notify your team
+`,
+  },
 ]
+
+/** Process docs added after initial launch — top-up inserts if slug missing */
+export const topUpProcessDocs = processDocs.filter((d) =>
+  ['mnda', 'partnerships', 'demos', 'pilots', 'time-off-request'].includes(d.slug)
+)
 
 export const policies = [
   {

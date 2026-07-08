@@ -40,6 +40,7 @@ describe('documents', () => {
     await saveDocument({ slug: 'strategy', title: 'Strategy', body: '' })
     await saveDocument({ slug: 'company-info', title: 'Company', body: '' })
     await saveDocument({ slug: 'quick-links', title: 'Links', body: '' })
+    await saveDocument({ slug: 'team-gtm', title: 'GTM Team', body: '' })
     await saveDocument({ slug: 'onboarding', title: 'Onboarding', body: '' })
     const processes = await listProcessDocuments()
     expect(processes).toHaveLength(1)

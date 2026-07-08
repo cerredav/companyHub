@@ -9,6 +9,8 @@ import {
   teamMembers as seedTeamMembers,
   legacyStrategyBody,
   RESERVED_SLUGS,
+  isReservedSlug,
+  topUpProcessDocs,
 } from './seed.js'
 
 // ponytail: single storage seam — swap this module for API calls when backend exists
@@ -44,6 +46,7 @@ const now = () => new Date().toISOString()
 function docSection(slug) {
   if (slug === 'strategy') return 'Strategy'
   if (slug === 'company-info' || slug === 'quick-links') return 'Home'
+  if (slug.startsWith('team-')) return 'Teams'
   return 'Processes'
 }
 
@@ -90,7 +93,7 @@ export async function listDocuments() {
 
 export async function listProcessDocuments() {
   const docs = await listDocuments()
-  return docs.filter((d) => !RESERVED_SLUGS.has(d.slug))
+  return docs.filter((d) => !isReservedSlug(d.slug))
 }
 
 export async function saveDocument({ id, slug, title, body }) {
@@ -380,7 +383,8 @@ export async function importAll(data) {
 // --- Seeding ---
 
 const SEED_KEY = 'companyHubSeeded'
-const TOPUP_KEY = 'companyHubTopUpV3'
+const TOPUP_KEY = 'companyHubTopUpV4'
+const TOPUP_V3_KEY = 'companyHubTopUpV3'
 
 export async function seedIfEmpty() {
   if (localStorage.getItem(SEED_KEY)) return
@@ -427,6 +431,7 @@ export async function seedIfEmpty() {
 
   localStorage.setItem(SEED_KEY, '1')
   localStorage.setItem(TOPUP_KEY, '1')
+  localStorage.setItem(TOPUP_V3_KEY, '1')
 }
 
 /** One-shot top-up for existing installs — never overwrites user edits */
@@ -435,22 +440,35 @@ export async function seedNewContent() {
 
   const ts = now()
 
-  if ((await db.policies.count()) === 0) {
-    await db.policies.bulkAdd(
-      seedPolicies.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
-    )
+  // v3 top-up (policies, home cards, strategy) — run once if not done
+  if (!localStorage.getItem(TOPUP_V3_KEY)) {
+    if ((await db.policies.count()) === 0) {
+      await db.policies.bulkAdd(
+        seedPolicies.map((p) => ({ id: uid(), ...p, updatedAt: ts }))
+      )
+    }
+
+    for (const doc of homeDocs) {
+      const existing = await getDocumentBySlug(doc.slug)
+      if (!existing) {
+        await saveDocument({ ...doc, updatedAt: ts })
+      }
+    }
+
+    const strategy = await getDocumentBySlug('strategy')
+    if (strategy && strategy.body === legacyStrategyBody) {
+      await saveDocument({ ...strategy, body: strategyDoc.body })
+    }
+
+    localStorage.setItem(TOPUP_V3_KEY, '1')
   }
 
-  for (const doc of homeDocs) {
+  // v4 top-up — new process docs only if slug missing
+  for (const doc of topUpProcessDocs) {
     const existing = await getDocumentBySlug(doc.slug)
     if (!existing) {
       await saveDocument({ ...doc, updatedAt: ts })
     }
-  }
-
-  const strategy = await getDocumentBySlug('strategy')
-  if (strategy && strategy.body === legacyStrategyBody) {
-    await saveDocument({ ...strategy, body: strategyDoc.body })
   }
 
   localStorage.setItem(TOPUP_KEY, '1')
@@ -479,4 +497,5 @@ export async function clearAll() {
   )
   localStorage.removeItem(SEED_KEY)
   localStorage.removeItem(TOPUP_KEY)
+  localStorage.removeItem(TOPUP_V3_KEY)
 }

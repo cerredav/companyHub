@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import Strategy from './pages/Strategy'
 import Engagements from './pages/Engagements'
 import Teams from './pages/Teams'
+import Policies from './pages/Policies'
 import Processes from './pages/Processes'
 import './styles.css'
 
@@ -17,16 +18,9 @@ const NAV = [
   { id: 'strategy', label: 'Strategy', icon: '◎' },
   { id: 'engagements', label: 'Engagements', icon: '◈' },
   { id: 'teams', label: 'Teams', icon: '◉' },
+  { id: 'policies', label: 'Policies', icon: '§' },
   { id: 'processes', label: 'Processes', icon: '▤' },
 ]
-
-const PAGES = {
-  home: Home,
-  strategy: Strategy,
-  engagements: Engagements,
-  teams: Teams,
-  processes: Processes,
-}
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme
@@ -65,11 +59,17 @@ function PasswordGate({ onUnlock }) {
   )
 }
 
+function parseHash(hash) {
+  const path = hash.slice(1) || 'home'
+  const [base, ...params] = path.split('/')
+  return { base, params }
+}
+
 function useHashRoute() {
-  const [route, setRoute] = useState(() => window.location.hash.slice(1) || 'home')
+  const [route, setRoute] = useState(() => parseHash(window.location.hash))
 
   useEffect(() => {
-    const onHash = () => setRoute(window.location.hash.slice(1) || 'home')
+    const onHash = () => setRoute(parseHash(window.location.hash))
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
@@ -81,7 +81,7 @@ export default function App() {
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
   const [ready, setReady] = useState(false)
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark')
-  const route = useHashRoute()
+  const { base: routeBase, params } = useHashRoute()
 
   useEffect(() => {
     applyTheme(theme)
@@ -106,7 +106,20 @@ export default function App() {
     return <div className="loading">Loading…</div>
   }
 
-  const Page = PAGES[route] ?? Home
+  const teamName = routeBase === 'teams' && params[0]
+    ? decodeURIComponent(params[0])
+    : null
+
+  let page
+  switch (routeBase) {
+    case 'home': page = <Home />; break
+    case 'strategy': page = <Strategy />; break
+    case 'engagements': page = <Engagements />; break
+    case 'teams': page = <Teams teamName={teamName} />; break
+    case 'policies': page = <Policies />; break
+    case 'processes': page = <Processes />; break
+    default: page = <Home />
+  }
 
   return (
     <div className="app">
@@ -117,7 +130,7 @@ export default function App() {
             <a
               key={item.id}
               href={`#${item.id}`}
-              className={`nav-link ${route === item.id ? 'active' : ''}`}
+              className={`nav-link ${routeBase === item.id ? 'active' : ''}`}
             >
               <span className="nav-icon">{item.icon}</span>
               {item.label}
@@ -131,7 +144,7 @@ export default function App() {
         </div>
       </aside>
       <main className="main">
-        <Page />
+        {page}
       </main>
     </div>
   )
