@@ -199,7 +199,11 @@ async function diffRecord(parentType, prev, next) {
     if (SKIP_DIFF_KEYS.has(key)) continue
     const oldVal = displayVal(a?.[key])
     const newVal = displayVal(b?.[key])
-    if (oldVal !== newVal) parts.push(`${key}: ${oldVal} → ${newVal}`)
+    if (oldVal === newVal) continue
+    const longDescription =
+      key === 'description'
+      && (String(a?.[key] ?? '').length > 80 || String(b?.[key] ?? '').length > 80)
+    parts.push(longDescription ? 'description: updated' : `${key}: ${oldVal} → ${newVal}`)
   }
 
   return parts.join(' · ')

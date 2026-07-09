@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import EditableTable from '../components/EditableTable'
 import AttachmentList from '../components/AttachmentList'
 import ActivityPanel from '../components/ActivityPanel'
+import MarkdownDoc from '../components/MarkdownDoc'
 import {
   listEngagements,
   saveEngagement,
@@ -98,7 +99,7 @@ function MemberSelect({ value, memberNames, onChange }) {
 const EMPTY_ENGAGEMENT = {
   name: '', type: 'pilot', partner: '', partnerIds: [], status: 'active',
   stage: '', owner: '', poc: '', pocContact: '',
-  startDate: '', nextStep: '', notes: '',
+  startDate: '', nextStep: '', notes: '', description: '',
 }
 
 const EMPTY_PARTNER = {
@@ -282,6 +283,12 @@ export default function Engagements({ tab: hashTab }) {
           rowDetailParentType="engagement"
           rowDetail={(row) => (
             <div className="row-detail-panels">
+              <MarkdownDoc
+                compact
+                title="Description"
+                body={row.description || ''}
+                onSave={(description) => saveEngagement({ ...row, description })}
+              />
               <ActivityPanel parentType="engagement" parentId={row.id} />
               <AttachmentList
                 parentType="engagement"
@@ -299,6 +306,7 @@ export default function Engagements({ tab: hashTab }) {
               row.poc,
               row.status,
               row.stage,
+              row.description,
               ...partnerNamesFor(row),
             ].some((v) => String(v).toLowerCase().includes(ql))
           }}

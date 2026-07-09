@@ -111,7 +111,7 @@ a { color: var(--larx-blue); text-decoration: none; }
   min-width: 0;
   max-width: calc(100dvw - var(--sidebar-w));
   padding: var(--space-8);
-  overflow: hidden;
+  overflow: scroll;
 }
 
 .page {
@@ -405,7 +405,7 @@ input:focus, select:focus, textarea:focus {
 
 .table-wrap {
   display: block;
-  overflow-x: scroll;
+  overflow-x: hidden;
   overflow-y: auto;
   max-height: 65vh;
   width: 100%;
@@ -439,11 +439,10 @@ input:focus, select:focus, textarea:focus {
 }
 
 table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   border-collapse: collapse;
   font-size: 11px;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 th, td {
@@ -466,20 +465,21 @@ th {
 }
 
 td {
-  white-space: nowrap;
-  max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 tr:last-child td { border-bottom: none; }
 
 tr:hover td { background: var(--bg-surface-hover); }
 
+tr:hover td.actions {
+  background: var(--bg-surface-hover);
+}
+
 .editing-row td {
   background: var(--larx-blue-tint);
   vertical-align: top;
-  max-width: none;
   overflow: visible;
 }
 
@@ -517,7 +517,7 @@ tr:hover td { background: var(--bg-surface-hover); }
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  max-width: 220px;
+  max-width: 100%;
 }
 
 .chip {
@@ -576,8 +576,30 @@ tr:hover td { background: var(--bg-surface-hover); }
   font-size: 10px;
 }
 
-.actions {
+.actions,
+.actions-col {
   white-space: nowrap;
+  width: 4rem;
+  min-width: 4rem;
+  max-width: 7.5rem;
+  vertical-align: top;
+  box-sizing: border-box;
+}
+
+th.actions-col,
+td.actions {
+  background: var(--bg-surface);
+}
+
+thead th.actions-col {
+  background: var(--bg-solid);
+}
+
+.editing-row td.actions {
+  background: var(--larx-blue-tint);
+  width: auto;
+  min-width: 7.5rem;
+  max-width: none;
 }
 
 .actions .btn {
@@ -586,6 +608,82 @@ tr:hover td { background: var(--bg-surface-hover); }
 
 .actions .btn:last-child {
   margin-right: 0;
+}
+
+.row-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.row-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface-2);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.row-menu-trigger:hover,
+.row-menu-trigger[aria-expanded='true'] {
+  background: var(--bg-surface-hover);
+  border-color: var(--border-medium);
+  color: var(--text-primary);
+}
+
+.row-menu-dropdown {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 10;
+  min-width: 120px;
+  padding: var(--space-1);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.row-menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.row-menu-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.row-menu-item--active {
+  color: var(--larx-blue);
+  font-weight: 700;
+}
+
+.row-menu-item--danger {
+  color: var(--larx-error);
+}
+
+.row-menu-item--danger:hover {
+  background: var(--larx-red-tint);
 }
 
 .empty {
@@ -1200,7 +1298,10 @@ tr:hover td { background: var(--bg-surface-hover); }
 
 /* Teams */
 
-.team-groups { margin-top: var(--space-8); }
+.team-groups {
+  margin-top: 0;
+  margin-bottom: var(--space-8);
+}
 
 .team-grid {
   display: grid;

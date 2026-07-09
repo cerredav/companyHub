@@ -1,10 +1,10 @@
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useEffect, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { countFiles, countActivities, countMeetingsFor } from '../db'
 
 const EMPTY = {}
 
-function DetailButton({ row, parentType, expandedId, onToggle }) {
+function useHistoryTooltip(row, parentType) {
   const fileCount = useLiveQuery(() => countFiles(parentType, row.id), [parentType, row.id]) ?? 0
   const activityCount = useLiveQuery(() => countActivities(parentType, row.id), [parentType, row.id]) ?? 0
   const meetingCount = useLiveQuery(() => countMeetingsFor(parentType, row.id), [parentType, row.id]) ?? 0
@@ -12,16 +12,93 @@ function DetailButton({ row, parentType, expandedId, onToggle }) {
   if (activityCount) parts.push(`${activityCount} update${activityCount !== 1 ? 's' : ''}`)
   if (meetingCount) parts.push(`${meetingCount} meeting${meetingCount !== 1 ? 's' : ''}`)
   if (fileCount) parts.push(`${fileCount} file${fileCount !== 1 ? 's' : ''}`)
-  const label = parts.length ? `History · ${parts.join(', ')}` : 'History'
+  return parts.length
+    ? `History · ${parts.join(', ')}`
+    : 'Updates, activity timeline, and documents'
+}
+
+function RowActionsMenu({
+  row,
+  open,
+  onOpenChange,
+  rowDetail,
+  rowDetailParentType,
+  expandedId,
+  onToggleHistory,
+  hideRowEdit,
+  onEdit,
+  onDelete,
+}) {
+  const menuRef = useRef(null)
+  const historyTooltip = useHistoryTooltip(row, rowDetailParentType)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOnOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) onOpenChange(false)
+    }
+    const closeOnEscape = (e) => {
+      if (e.key === 'Escape') onOpenChange(false)
+    }
+    document.addEventListener('mousedown', closeOnOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open, onOpenChange])
+
+  const run = (action) => {
+    onOpenChange(false)
+    action()
+  }
 
   return (
-    <button
-      className={`btn btn-sm ${expandedId === row.id ? 'btn-primary' : ''}`}
-      onClick={() => onToggle(row.id)}
-      title="Updates, activity timeline, and documents"
-    >
-      {label}
-    </button>
+    <div className="row-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="row-menu-trigger"
+        onClick={() => onOpenChange(!open)}
+        aria-label="Row actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="row-menu-dropdown" role="menu">
+          {rowDetail && rowDetailParentType && (
+            <button
+              type="button"
+              className={`row-menu-item${expandedId === row.id ? ' row-menu-item--active' : ''}`}
+              role="menuitem"
+              title={historyTooltip}
+              onClick={() => run(() => onToggleHistory(row.id))}
+            >
+              History
+            </button>
+          )}
+          {!hideRowEdit && (
+            <button
+              type="button"
+              className="row-menu-item"
+              role="menuitem"
+              onClick={() => run(() => onEdit(row))}
+            >
+              Edit
+            </button>
+          )}
+          <button
+            type="button"
+            className="row-menu-item row-menu-item--danger"
+            role="menuitem"
+            onClick={() => run(() => onDelete(row.id))}
+          >
+            Delete
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -40,6 +117,7 @@ export default function EditableTable({
   const [draft, setDraft] = useState(null)
   const [filter, setFilter] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+  const [openMenuId, setOpenMenuId] = useState(null)
 
   const visible = filterFn && filter
     ? rows.filter((r) => filterFn(r, filter))
@@ -51,12 +129,14 @@ export default function EditableTable({
     setEditingId('new')
     setDraft({ ...emptyRow })
     setExpandedId(null)
+    setOpenMenuId(null)
   }
 
   const startEdit = (row) => {
     setEditingId(row.id)
     setDraft({ ...row })
     setExpandedId(null)
+    setOpenMenuId(null)
   }
 
   const cancel = () => {
@@ -134,18 +214,18 @@ export default function EditableTable({
 
   const renderActions = (row) => (
     <td className="actions">
-      {rowDetail && rowDetailParentType && (
-        <DetailButton
-          row={row}
-          parentType={rowDetailParentType}
-          expandedId={expandedId}
-          onToggle={toggleExpand}
-        />
-      )}
-      {!hideRowEdit && (
-        <button className="btn btn-sm" onClick={() => startEdit(row)}>Edit</button>
-      )}
-      <button className="btn btn-sm btn-danger" onClick={() => handleDelete(row.id)}>Delete</button>
+      <RowActionsMenu
+        row={row}
+        open={openMenuId === row.id}
+        onOpenChange={(isOpen) => setOpenMenuId(isOpen ? row.id : null)}
+        rowDetail={rowDetail}
+        rowDetailParentType={rowDetailParentType}
+        expandedId={expandedId}
+        onToggleHistory={toggleExpand}
+        hideRowEdit={hideRowEdit}
+        onEdit={startEdit}
+        onDelete={handleDelete}
+      />
     </td>
   )
 
@@ -165,42 +245,48 @@ export default function EditableTable({
 
       <div className="table-wrap">
         <table>
+          <colgroup>
+            <col className="actions-col" />
+            {columns.map((c) => (
+              <col key={c.key} />
+            ))}
+          </colgroup>
           <thead>
             <tr>
+              <th className="actions-col">Actions</th>
               {columns.map((c) => <th key={c.key}>{c.label}</th>)}
-              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {editingId === 'new' && (
               <tr className="editing-row">
-                {columns.map((c) => (
-                  <td key={c.key}>{renderEditCell(c)}</td>
-                ))}
                 <td className="actions">
                   <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
                   <button className="btn btn-sm" onClick={cancel}>Cancel</button>
                 </td>
+                {columns.map((c) => (
+                  <td key={c.key}>{renderEditCell(c)}</td>
+                ))}
               </tr>
             )}
             {visible.map((row) => (
               <Fragment key={row.id}>
                 {editingId === row.id ? (
                   <tr key={row.id} className="editing-row">
-                    {columns.map((c) => (
-                      <td key={c.key}>{renderEditCell(c)}</td>
-                    ))}
                     <td className="actions">
                       <button className="btn btn-primary btn-sm" onClick={save}>Save</button>
                       <button className="btn btn-sm" onClick={cancel}>Cancel</button>
                     </td>
+                    {columns.map((c) => (
+                      <td key={c.key}>{renderEditCell(c)}</td>
+                    ))}
                   </tr>
                 ) : (
                   <tr key={row.id}>
+                    {renderActions(row)}
                     {columns.map((c) => (
                       <td key={c.key}>{renderCell(c, row)}</td>
                     ))}
-                    {renderActions(row)}
                   </tr>
                 )}
                 {rowDetail && expandedId === row.id && editingId !== row.id && (

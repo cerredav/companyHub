@@ -323,6 +323,24 @@ describe('engagements', () => {
     await deleteEngagement(eng.id)
     expect(await listFiles('engagement', eng.id)).toHaveLength(0)
   })
+
+  it('persists description and logs change activity when updated', async () => {
+    const eng = await saveEngagement({
+      name: 'E1', type: 'pilot', status: 'active',
+      partner: '', partnerIds: [], stage: '', owner: '', poc: '', pocContact: '',
+      startDate: '', nextStep: '', notes: '', description: '',
+    })
+    const updated = await saveEngagement({ ...eng, description: 'Pilot scope and goals' })
+    expect(updated.description).toBe('Pilot scope and goals')
+
+    const list = await listEngagements()
+    expect(list[0].description).toBe('Pilot scope and goals')
+
+    const activities = await listActivities('engagement', eng.id)
+    expect(activities).toHaveLength(1)
+    expect(activities[0].kind).toBe('change')
+    expect(activities[0].text).toContain('description: — → Pilot scope and goals')
+  })
 })
 
 describe('activities', () => {

@@ -270,20 +270,6 @@ export default function Teams({ teamName }) {
       <h1>Teams</h1>
       <p className="subtitle">Team roster — click a team for members, engagements, and sections.</p>
 
-      <h2 className="section-heading">Team Roster</h2>
-      <EditableTable
-        rows={members}
-        columns={MEMBER_COLUMNS}
-        emptyRow={EMPTY_MEMBER}
-        onSave={saveTeamMember}
-        onDelete={deleteTeamMember}
-        filterFn={(row, q) =>
-          [row.name, row.role, row.team, row.email, row.location, row.timezone].some((v) =>
-            String(v).toLowerCase().includes(q.toLowerCase())
-          )
-        }
-      />
-
       {teams.length > 0 && (
         <div className="team-groups">
           <h2>By Team</h2>
@@ -309,6 +295,20 @@ export default function Teams({ teamName }) {
           </div>
         </div>
       )}
+
+      <h2 className="section-heading">Team Roster</h2>
+      <EditableTable
+        rows={members}
+        columns={MEMBER_COLUMNS}
+        emptyRow={EMPTY_MEMBER}
+        onSave={saveTeamMember}
+        onDelete={deleteTeamMember}
+        filterFn={(row, q) =>
+          [row.name, row.role, row.team, row.email, row.location, row.timezone].some((v) =>
+            String(v).toLowerCase().includes(q.toLowerCase())
+          )
+        }
+      />
     </div>
   )
 }
