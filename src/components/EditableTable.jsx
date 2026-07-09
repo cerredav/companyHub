@@ -5,9 +5,18 @@ import { countFiles, countActivities, countMeetingsFor } from '../db'
 const EMPTY = {}
 
 function useHistoryTooltip(row, parentType) {
-  const fileCount = useLiveQuery(() => countFiles(parentType, row.id), [parentType, row.id]) ?? 0
-  const activityCount = useLiveQuery(() => countActivities(parentType, row.id), [parentType, row.id]) ?? 0
-  const meetingCount = useLiveQuery(() => countMeetingsFor(parentType, row.id), [parentType, row.id]) ?? 0
+  const fileCount = useLiveQuery(async () => {
+    if (!parentType) return 0
+    return countFiles(parentType, row.id)
+  }, [parentType, row.id]) ?? 0
+  const activityCount = useLiveQuery(async () => {
+    if (!parentType) return 0
+    return countActivities(parentType, row.id)
+  }, [parentType, row.id]) ?? 0
+  const meetingCount = useLiveQuery(async () => {
+    if (!parentType) return 0
+    return countMeetingsFor(parentType, row.id)
+  }, [parentType, row.id]) ?? 0
   const parts = []
   if (activityCount) parts.push(`${activityCount} update${activityCount !== 1 ? 's' : ''}`)
   if (meetingCount) parts.push(`${meetingCount} meeting${meetingCount !== 1 ? 's' : ''}`)
