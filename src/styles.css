@@ -32,6 +32,7 @@ a { color: var(--larx-blue); text-decoration: none; }
   display: flex;
   min-height: 100vh;
   max-width: 100dvw;
+  max-height: 100dvh;
   overflow-x: hidden;
 }
 
