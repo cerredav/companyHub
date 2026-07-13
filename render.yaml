@@ -11,6 +11,7 @@ services:
       - key: SQLITE_PATH
         value: /var/data/hub.sqlite
       - key: CORS_ORIGINS
+        # Pages site: https://cerredav.github.io/companyHub/ → Origin https://cerredav.github.io
         value: https://cerredav.github.io,http://localhost:5173
       - key: HUB_PASSWORD
         sync: false

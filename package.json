@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "homepage": "https://cerredav.github.io/companyHub/",
   "scripts": {
     "dev": "vite",
     "server": "node --watch server/index.js",

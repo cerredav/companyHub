@@ -40,6 +40,16 @@ function parseCorsOrigins(value) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+    .map(normalizeCorsOrigin)
+}
+
+/** Origin never includes a path — https://host/companyHub/ → https://host */
+function normalizeCorsOrigin(entry) {
+  try {
+    return new URL(entry).origin
+  } catch {
+    return String(entry).replace(/\/+$/, '')
+  }
 }
 
 export function createApp({
@@ -50,11 +60,12 @@ export function createApp({
 } = {}) {
   const db = openDb(dbPath)
   const app = express()
+  const allowedOrigins = corsOrigins.map(normalizeCorsOrigin)
 
   // ponytail: allow Pages/localhost without a cors dependency
   app.use((req, res, next) => {
     const origin = req.headers.origin
-    if (origin && corsOrigins.includes(origin)) {
+    if (origin && allowedOrigins.includes(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
       res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)

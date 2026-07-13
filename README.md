@@ -20,7 +20,7 @@ GitHub Pages hosts the **static client**. Render hosts the **Express + SQLite AP
    - **`HUB_TOKEN_SECRET`** — API key; must match the client’s `VITE_HUB_TOKEN_SECRET`
 4. Confirm health: `https://<your-service>.onrender.com/api/health` → `{ "ok": true }`.
 
-CORS is already set for `https://cerredav.github.io` and local Vite. Every `/api` call except `/api/health` requires:
+CORS is set for the Pages site (**https://cerredav.github.io/companyHub/** → Origin `https://cerredav.github.io`) and local Vite. Every `/api` call except `/api/health` requires:
 
 `Authorization: Bearer <HUB_TOKEN_SECRET> [<sessionToken>]`
 
