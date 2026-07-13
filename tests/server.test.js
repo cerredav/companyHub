@@ -137,22 +137,33 @@ describe('server API', () => {
     expect(blob.body.toString()).toBe('hello policy pdf')
   })
 
-  it('allows CORS for configured Pages origin', async () => {
+  it('allows CORS for Pages origin and answers OPTIONS with 204', async () => {
+    // Pages Origin is always allowed — no corsOrigins override needed
     const corsApp = createApp({
       dbPath: join(tmpDir, 'cors.sqlite'),
-      corsOrigins: ['https://cerredav.github.io/companyHub/'],
       password: PASSWORD,
       tokenSecret: TOKEN_SECRET,
     })
     try {
-      const res = await request(corsApp)
-        .options('/api/snapshot')
+      const preflight = await request(corsApp)
+        .options('/api/auth/login')
         .set('Origin', 'https://cerredav.github.io')
-        .set('Access-Control-Request-Method', 'GET')
+        .set('Access-Control-Request-Method', 'POST')
+        .set('Access-Control-Request-Headers', 'authorization,content-type')
         .expect(204)
 
-      expect(res.headers['access-control-allow-origin']).toBe('https://cerredav.github.io')
-      expect(res.headers['access-control-allow-headers']).toMatch(/Authorization/i)
+      expect(preflight.headers['access-control-allow-origin']).toBe('https://cerredav.github.io')
+      expect(preflight.headers['access-control-allow-methods']).toMatch(/POST/i)
+      expect(preflight.headers['access-control-allow-headers']).toMatch(/Authorization/i)
+
+      const login = await request(corsApp)
+        .post('/api/auth/login')
+        .set('Origin', 'https://cerredav.github.io')
+        .set('Authorization', secretHeader())
+        .send({ password: PASSWORD })
+        .expect(200)
+
+      expect(login.headers['access-control-allow-origin']).toBe('https://cerredav.github.io')
     } finally {
       corsApp._closeDb?.()
     }
@@ -206,5 +217,32 @@ describe('server API', () => {
       .expect(401)
 
     await request(app).get('/api/health').expect(200)
+  })
+
+  it('logs request method, path, and response status', async () => {
+    const lines = []
+    const logged = createApp({
+      dbPath: join(tmpDir, 'log.sqlite'),
+      password: PASSWORD,
+      tokenSecret: TOKEN_SECRET,
+      log: (line) => lines.push(line),
+    })
+    try {
+      await request(logged).get('/api/health').expect(200)
+      // finish event is async relative to expect — wait a tick
+      await new Promise((r) => setImmediate(r))
+
+      expect(lines).toHaveLength(1)
+      const entry = JSON.parse(lines[0])
+      expect(entry).toMatchObject({
+        method: 'GET',
+        path: '/api/health',
+        status: 200,
+      })
+      expect(typeof entry.ms).toBe('number')
+      expect(entry.ts).toBeTruthy()
+    } finally {
+      logged._closeDb?.()
+    }
   })
 })

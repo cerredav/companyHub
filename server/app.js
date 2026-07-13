@@ -24,6 +24,11 @@ import {
 
 const defaultDbPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'hub.sqlite')
 
+/** GitHub Pages site https://cerredav.github.io/companyHub/ → browser Origin is host only */
+export const PAGES_ORIGIN = 'https://cerredav.github.io'
+
+const DEFAULT_CORS_ORIGINS = [PAGES_ORIGIN, 'http://localhost:5173']
+
 const CORS_HEADERS = [
   'Content-Type',
   'Authorization',
@@ -34,6 +39,8 @@ const CORS_HEADERS = [
   'X-Size',
   'X-Updated-At',
 ].join(', ')
+
+const CORS_METHODS = 'GET,HEAD,PUT,POST,DELETE,OPTIONS'
 
 function parseCorsOrigins(value) {
   return String(value || '')
@@ -52,26 +59,65 @@ function normalizeCorsOrigin(entry) {
   }
 }
 
+function resolveAllowedOrigins(corsOrigins) {
+  const extra = Array.isArray(corsOrigins)
+    ? corsOrigins
+    : parseCorsOrigins(corsOrigins)
+  return [...new Set([
+    ...DEFAULT_CORS_ORIGINS,
+    ...parseCorsOrigins(process.env.CORS_ORIGINS),
+    ...extra.map(normalizeCorsOrigin),
+  ])]
+}
+
+function applyCorsHeaders(res, origin) {
+  res.setHeader('Access-Control-Allow-Origin', origin)
+  res.setHeader('Access-Control-Allow-Methods', CORS_METHODS)
+  res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
+  res.setHeader('Access-Control-Max-Age', '86400')
+  res.setHeader('Vary', 'Origin')
+}
+
 export function createApp({
   dbPath = defaultDbPath,
-  corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS),
+  corsOrigins = [],
   password = defaultPassword(),
   tokenSecret = defaultTokenSecret(),
+  // ponytail: inject null in tests to keep the suite quiet
+  log = process.env.NODE_ENV === 'test' ? null : (...args) => console.log(...args),
 } = {}) {
   const db = openDb(dbPath)
   const app = express()
-  const allowedOrigins = corsOrigins.map(normalizeCorsOrigin)
+  const allowedOrigins = resolveAllowedOrigins(corsOrigins)
 
-  // ponytail: allow Pages/localhost without a cors dependency
+  if (log) {
+    app.use((req, res, next) => {
+      const started = Date.now()
+      res.on('finish', () => {
+        // Never log Authorization or bodies — password/secret live there
+        log(JSON.stringify({
+          ts: new Date().toISOString(),
+          method: req.method,
+          path: req.originalUrl,
+          status: res.statusCode,
+          ms: Date.now() - started,
+          origin: req.headers.origin || null,
+        }))
+      })
+      next()
+    })
+  }
+
+  // CORS first — Pages Origin + OPTIONS preflight (204) before auth
   app.use((req, res, next) => {
     const origin = req.headers.origin
     if (origin && allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin)
-      res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
-      res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
-      res.setHeader('Vary', 'Origin')
+      applyCorsHeaders(res, origin)
     }
-    if (req.method === 'OPTIONS') return res.sendStatus(204)
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end()
+    }
     next()
   })
 
@@ -81,7 +127,7 @@ export function createApp({
 
   // Every /api route except health requires Authorization: Bearer <HUB_TOKEN_SECRET> [...]
   app.use('/api', (req, res, next) => {
-    if (req.path === '/health') return next()
+    if (req.method === 'OPTIONS' || req.path === '/health') return next()
     const parsed = parseBearerAuthorization(req.get('authorization'))
     if (!parsed || !secretsMatch(parsed.apiSecret, tokenSecret)) {
       return res.status(401).json({ error: 'unauthorized' })
@@ -100,7 +146,9 @@ export function createApp({
 
   // Data routes also require a valid session token after login
   app.use('/api', (req, res, next) => {
-    if (req.path === '/health' || req.path === '/auth/login') return next()
+    if (req.method === 'OPTIONS' || req.path === '/health' || req.path === '/auth/login') {
+      return next()
+    }
     if (!verifyToken(req.hubSessionToken, tokenSecret)) {
       return res.status(401).json({ error: 'unauthorized' })
     }
