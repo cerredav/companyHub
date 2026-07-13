@@ -140,7 +140,7 @@ describe('server API', () => {
   it('allows CORS for configured Pages origin', async () => {
     const corsApp = createApp({
       dbPath: join(tmpDir, 'cors.sqlite'),
-      corsOrigins: ['https://cerredav.github.io'],
+      corsOrigins: ['https://cerredav.github.io/companyHub/'],
       password: PASSWORD,
       tokenSecret: TOKEN_SECRET,
     })
