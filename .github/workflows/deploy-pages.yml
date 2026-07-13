@@ -30,6 +30,8 @@ jobs:
           # Set in repo Settings → Secrets → Actions after the API is live, e.g.
           # https://company-hub-api.onrender.com/api
           VITE_API_URL: ${{ secrets.VITE_API_URL }}
+          # Must match Render HUB_TOKEN_SECRET
+          VITE_HUB_TOKEN_SECRET: ${{ secrets.VITE_HUB_TOKEN_SECRET }}
         run: npm run build
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -1,9 +1,25 @@
 import { db } from '../db.js'
 import { importAll } from '../db.js'
+import { authHeaders, notifyAuthExpired } from './auth.js'
 
 const API = import.meta.env.VITE_API_URL || '/api'
 const POLL_MS = 20_000
 const FLUSH_DEBOUNCE_MS = 300
+
+async function apiFetch(url, init = {}) {
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders(),
+      ...(init.headers || {}),
+    },
+  })
+  if (res.status === 401) {
+    notifyAuthExpired()
+    throw new Error('unauthorized')
+  }
+  return res
+}
 
 export const SYNC_COLLECTIONS = [
   'documents',
@@ -121,7 +137,7 @@ async function applyRemoteDeletion(collection, id, deletedAt) {
 }
 
 async function fetchFileBlob(meta) {
-  const res = await fetch(`${API}/files/${meta.id}/blob`)
+  const res = await apiFetch(`${API}/files/${meta.id}/blob`)
   if (!res.ok) throw new Error(`blob_fetch_failed:${res.status}`)
   const blob = await res.arrayBuffer()
   applyingRemote = true
@@ -181,7 +197,7 @@ async function applyPayload(payload) {
 }
 
 export async function pullSnapshot() {
-  const res = await fetch(`${API}/snapshot`)
+  const res = await apiFetch(`${API}/snapshot`)
   if (!res.ok) throw new Error(`snapshot_failed:${res.status}`)
   const payload = await res.json()
   await applyPayload(payload)
@@ -192,7 +208,7 @@ async function pollChanges() {
   const url = lastSyncAt
     ? `${API}/changes?since=${encodeURIComponent(lastSyncAt)}`
     : `${API}/snapshot`
-  const res = await fetch(url)
+  const res = await apiFetch(url)
   if (!res.ok) throw new Error(`poll_failed:${res.status}`)
   const payload = await res.json()
   await applyPayload(payload)
@@ -201,7 +217,7 @@ async function pollChanges() {
 async function flushPutRecord(collection, id) {
   const record = await db[collection].get(id)
   if (!record) return
-  const res = await fetch(`${API}/records/${collection}/${id}`, {
+  const res = await apiFetch(`${API}/records/${collection}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(record),
@@ -211,7 +227,7 @@ async function flushPutRecord(collection, id) {
 }
 
 async function flushDeleteRecord(collection, id) {
-  const res = await fetch(`${API}/records/${collection}/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`${API}/records/${collection}/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`delete_record_failed:${res.status}`)
 }
 
@@ -223,7 +239,7 @@ async function flushPutFile(id) {
     : await file.blob.arrayBuffer?.()
   if (!body) return
 
-  const res = await fetch(`${API}/files/${id}`, {
+  const res = await apiFetch(`${API}/files/${id}`, {
     method: 'PUT',
     headers: {
       'Content-Type': file.mimeType || 'application/octet-stream',
@@ -241,7 +257,7 @@ async function flushPutFile(id) {
 }
 
 async function flushDeleteFile(id) {
-  const res = await fetch(`${API}/files/${id}`, { method: 'DELETE' })
+  const res = await apiFetch(`${API}/files/${id}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`delete_file_failed:${res.status}`)
 }
 

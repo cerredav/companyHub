@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
 import { seedIfEmpty, seedNewContent, migratePartnerLinks, migrateAgreementDashboardLinks } from './db'
+import {
+  AUTH_EXPIRED_EVENT,
+  clearLegacyUnlock,
+  isAuthenticated,
+  login,
+} from './lib/auth'
 import Home from './pages/Home'
 import Strategy from './pages/Strategy'
 import Engagements from './pages/Engagements'
@@ -9,9 +15,6 @@ import Meetings from './pages/Meetings'
 import Processes from './pages/Processes'
 import './styles.css'
 
-// ponytail: cosmetic gate only — not security; data is client-side
-const SHARED_PASSWORD = 'company'
-const UNLOCK_KEY = 'companyHubUnlocked'
 const THEME_KEY = 'companyHubTheme'
 
 const NAV = [
@@ -31,14 +34,19 @@ function applyTheme(theme) {
 function PasswordGate({ onUnlock }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
-    if (password === SHARED_PASSWORD) {
-      localStorage.setItem(UNLOCK_KEY, '1')
+    setBusy(true)
+    setError('')
+    try {
+      await login(password)
       onUnlock()
-    } else {
-      setError('Incorrect password')
+    } catch (err) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -53,9 +61,12 @@ function PasswordGate({ onUnlock }) {
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError('') }}
           autoFocus
+          disabled={busy}
         />
         {error && <p className="error">{error}</p>}
-        <button className="btn btn-primary" type="submit">Enter</button>
+        <button className="btn btn-primary" type="submit" disabled={busy}>
+          {busy ? 'Checking…' : 'Enter'}
+        </button>
       </form>
     </div>
   )
@@ -80,11 +91,15 @@ function useHashRoute() {
 }
 
 export default function App() {
-  const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
+  const [unlocked, setUnlocked] = useState(() => isAuthenticated())
   const [ready, setReady] = useState(false)
   const [syncStatus, setSyncStatus] = useState({ state: 'syncing', detail: '' })
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark')
   const { base: routeBase, params } = useHashRoute()
+
+  useEffect(() => {
+    clearLegacyUnlock()
+  }, [])
 
   useEffect(() => {
     applyTheme(theme)
@@ -92,17 +107,39 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    import('./lib/sync.js').then(({ syncPull, syncStart }) => {
+    const onExpired = () => {
+      setUnlocked(false)
+      setReady(false)
+    }
+    window.addEventListener(AUTH_EXPIRED_EVENT, onExpired)
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired)
+  }, [])
+
+  useEffect(() => {
+    if (!unlocked) return undefined
+    let cancelled = false
+    import('./lib/sync.js').then(({ syncPull, syncStart, syncStop }) => {
+      if (cancelled) return
       syncPull()
         .catch(() => {})
         .then(() => seedIfEmpty())
         .then(() => seedNewContent())
         .then(() => migratePartnerLinks())
         .then(() => migrateAgreementDashboardLinks())
-        .then(() => syncStart(setSyncStatus))
-        .then(() => setReady(true))
+        .then(() => {
+          if (cancelled) {
+            syncStop()
+            return
+          }
+          syncStart(setSyncStatus)
+          setReady(true)
+        })
     })
-  }, [])
+    return () => {
+      cancelled = true
+      import('./lib/sync.js').then(({ syncStop }) => syncStop())
+    }
+  }, [unlocked])
 
   const toggleTheme = () => {
     setTheme((t) => (t === 'dark' ? 'light' : 'dark'))

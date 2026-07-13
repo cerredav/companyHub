@@ -12,11 +12,21 @@ import {
   getFileBlob,
   isRecordCollection,
 } from './db.js'
+import {
+  defaultPassword,
+  defaultTokenSecret,
+  issueToken,
+  parseBearerAuthorization,
+  passwordsMatch,
+  secretsMatch,
+  verifyToken,
+} from './auth.js'
 
 const defaultDbPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'hub.sqlite')
 
 const CORS_HEADERS = [
   'Content-Type',
+  'Authorization',
   'X-Parent-Type',
   'X-Parent-Id',
   'X-Name',
@@ -35,6 +45,8 @@ function parseCorsOrigins(value) {
 export function createApp({
   dbPath = defaultDbPath,
   corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS),
+  password = defaultPassword(),
+  tokenSecret = defaultTokenSecret(),
 } = {}) {
   const db = openDb(dbPath)
   const app = express()
@@ -44,7 +56,7 @@ export function createApp({
     const origin = req.headers.origin
     if (origin && corsOrigins.includes(origin)) {
       res.setHeader('Access-Control-Allow-Origin', origin)
-      res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS')
+      res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
       res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
       res.setHeader('Vary', 'Origin')
     }
@@ -54,6 +66,34 @@ export function createApp({
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true })
+  })
+
+  // Every /api route except health requires Authorization: Bearer <HUB_TOKEN_SECRET> [...]
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next()
+    const parsed = parseBearerAuthorization(req.get('authorization'))
+    if (!parsed || !secretsMatch(parsed.apiSecret, tokenSecret)) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+    req.hubSessionToken = parsed.sessionToken
+    next()
+  })
+
+  app.post('/api/auth/login', express.json({ limit: '4kb' }), (req, res) => {
+    if (!passwordsMatch(req.body?.password, password)) {
+      return res.status(401).json({ error: 'invalid_password' })
+    }
+    const issued = issueToken(tokenSecret)
+    return res.json(issued)
+  })
+
+  // Data routes also require a valid session token after login
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/health' || req.path === '/auth/login') return next()
+    if (!verifyToken(req.hubSessionToken, tokenSecret)) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+    next()
   })
 
   app.get('/api/snapshot', (_req, res) => {
@@ -126,5 +166,6 @@ export function createApp({
 
   app._closeDb = () => db.close()
   app._db = db
+  app._tokenSecret = tokenSecret
   return app
 }

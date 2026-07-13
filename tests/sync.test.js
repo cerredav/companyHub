@@ -12,6 +12,12 @@ import {
   _setApplyingRemote,
   _applyPayloadForTest,
 } from '../src/lib/sync.js'
+import {
+  AUTH_EXPIRED_EVENT,
+  _setAuthForTest,
+  getAuth,
+  logout,
+} from '../src/lib/auth.js'
 
 function emptySnapshot() {
   return {
@@ -28,6 +34,11 @@ beforeEach(async () => {
   await clearAll()
   await db.outbox.clear()
   _setApplyingRemote(false)
+  logout()
+  _setAuthForTest({
+    token: 'test-token',
+    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+  })
   vi.restoreAllMocks()
 })
 
@@ -35,7 +46,7 @@ describe('client sync', () => {
   it('enqueues local writes in the outbox', async () => {
     vi.stubGlobal('fetch', vi.fn(async (url) => {
       if (String(url).endsWith('/api/snapshot')) {
-        return { ok: true, json: async () => emptySnapshot() }
+        return { ok: true, status: 200, json: async () => emptySnapshot() }
       }
       throw new Error(`unexpected fetch: ${url}`)
     }))
@@ -125,7 +136,7 @@ describe('client sync', () => {
         return { ok: true, status: 200 }
       }
       if (String(url).endsWith('/api/snapshot')) {
-        return { ok: true, json: async () => emptySnapshot() }
+        return { ok: true, status: 200, json: async () => emptySnapshot() }
       }
       return { ok: true, status: 200, json: async () => emptySnapshot() }
     }))
@@ -137,5 +148,22 @@ describe('client sync', () => {
 
     expect(puts.some((p) => p.name === 'Live Sync')).toBe(true)
     expect(await db.outbox.toArray()).toHaveLength(0)
+  })
+
+  it('sends Authorization and clears auth on 401', async () => {
+    const headersSeen = []
+    let expired = false
+    window.addEventListener(AUTH_EXPIRED_EVENT, () => { expired = true })
+
+    vi.stubGlobal('fetch', vi.fn(async (_url, init) => {
+      headersSeen.push(init?.headers || {})
+      return { ok: false, status: 401 }
+    }))
+
+    await expect(syncPull()).rejects.toThrow(/unauthorized/)
+
+    expect(headersSeen[0].Authorization).toBe('Bearer dev-hub-secret test-token')
+    expect(getAuth()).toBeNull()
+    expect(expired).toBe(true)
   })
 })

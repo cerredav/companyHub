@@ -5,17 +5,44 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import request from 'supertest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { createApp } from '../server/app.js'
+import { issueToken } from '../server/auth.js'
+
+const PASSWORD = 'test-hub-password'
+const TOKEN_SECRET = 'test-token-secret'
 
 let dbPath
 let app
 let tmpDir
+let authHeader
 
-beforeEach(() => {
+function secretHeader() {
+  return `Bearer ${TOKEN_SECRET}`
+}
+
+function sessionHeader(sessionToken) {
+  return `Bearer ${TOKEN_SECRET} ${sessionToken}`
+}
+
+async function login(agentApp = app, password = PASSWORD) {
+  const res = await request(agentApp)
+    .post('/api/auth/login')
+    .set('Authorization', secretHeader())
+    .send({ password })
+    .expect(200)
+  return sessionHeader(res.body.token)
+}
+
+beforeEach(async () => {
   tmpDir = mkdtempSync(join(tmpdir(), 'hub-'))
   dbPath = join(tmpDir, 'test.sqlite')
-  app = createApp({ dbPath })
+  app = createApp({
+    dbPath,
+    password: PASSWORD,
+    tokenSecret: TOKEN_SECRET,
+  })
+  authHeader = await login()
 })
 
 afterEach(() => {
@@ -34,10 +61,14 @@ describe('server API', () => {
 
     await request(app)
       .put('/api/records/policies/p1')
+      .set('Authorization', authHeader)
       .send(record)
       .expect(200)
 
-    const snap = await request(app).get('/api/snapshot').expect(200)
+    const snap = await request(app)
+      .get('/api/snapshot')
+      .set('Authorization', authHeader)
+      .expect(200)
     expect(snap.body.records).toHaveLength(1)
     expect(snap.body.records[0].data.name).toBe('Travel Policy')
   })
@@ -45,11 +76,13 @@ describe('server API', () => {
   it('rejects stale writes with 409', async () => {
     await request(app)
       .put('/api/records/policies/p1')
+      .set('Authorization', authHeader)
       .send({ id: 'p1', name: 'New', updatedAt: '2026-06-01T00:00:00.000Z' })
       .expect(200)
 
     await request(app)
       .put('/api/records/policies/p1')
+      .set('Authorization', authHeader)
       .send({ id: 'p1', name: 'Old', updatedAt: '2026-01-01T00:00:00.000Z' })
       .expect(409)
   })
@@ -57,14 +90,15 @@ describe('server API', () => {
   it('delete produces a tombstone visible in changes', async () => {
     await request(app)
       .put('/api/records/policies/p1')
+      .set('Authorization', authHeader)
       .send({ id: 'p1', name: 'X', updatedAt: '2026-01-01T00:00:00.000Z' })
       .expect(200)
 
-    const before = await request(app).get('/api/snapshot').expect(200)
-    await request(app).delete('/api/records/policies/p1').expect(200)
+    await request(app).delete('/api/records/policies/p1').set('Authorization', authHeader).expect(200)
 
     const changes = await request(app)
       .get('/api/changes?since=2020-01-01T00:00:00.000Z')
+      .set('Authorization', authHeader)
       .expect(200)
 
     expect(changes.body.deletions).toEqual(
@@ -80,6 +114,7 @@ describe('server API', () => {
 
     await request(app)
       .put('/api/files/f1')
+      .set('Authorization', authHeader)
       .set('X-Parent-Type', 'policy')
       .set('X-Parent-Id', 'p1')
       .set('X-Name', 'policy.pdf')
@@ -89,10 +124,16 @@ describe('server API', () => {
       .send(bytes)
       .expect(200)
 
-    const snap = await request(app).get('/api/snapshot').expect(200)
+    const snap = await request(app)
+      .get('/api/snapshot')
+      .set('Authorization', authHeader)
+      .expect(200)
     expect(snap.body.files[0].name).toBe('policy.pdf')
 
-    const blob = await request(app).get('/api/files/f1/blob').expect(200)
+    const blob = await request(app)
+      .get('/api/files/f1/blob')
+      .set('Authorization', authHeader)
+      .expect(200)
     expect(blob.body.toString()).toBe('hello policy pdf')
   })
 
@@ -100,6 +141,8 @@ describe('server API', () => {
     const corsApp = createApp({
       dbPath: join(tmpDir, 'cors.sqlite'),
       corsOrigins: ['https://cerredav.github.io'],
+      password: PASSWORD,
+      tokenSecret: TOKEN_SECRET,
     })
     try {
       const res = await request(corsApp)
@@ -109,8 +152,59 @@ describe('server API', () => {
         .expect(204)
 
       expect(res.headers['access-control-allow-origin']).toBe('https://cerredav.github.io')
+      expect(res.headers['access-control-allow-headers']).toMatch(/Authorization/i)
     } finally {
       corsApp._closeDb?.()
     }
+  })
+
+  it('login requires API secret; returns session; wrong password is 401', async () => {
+    await request(app)
+      .post('/api/auth/login')
+      .send({ password: PASSWORD })
+      .expect(401)
+
+    await request(app)
+      .post('/api/auth/login')
+      .set('Authorization', 'Bearer wrong-secret')
+      .send({ password: PASSWORD })
+      .expect(401)
+
+    const ok = await request(app)
+      .post('/api/auth/login')
+      .set('Authorization', secretHeader())
+      .send({ password: PASSWORD })
+      .expect(200)
+
+    expect(ok.body.token).toBeTruthy()
+    expect(ok.body.expiresAt).toBeTruthy()
+
+    await request(app)
+      .get('/api/snapshot')
+      .set('Authorization', sessionHeader(ok.body.token))
+      .expect(200)
+
+    await request(app)
+      .post('/api/auth/login')
+      .set('Authorization', secretHeader())
+      .send({ password: 'wrong' })
+      .expect(401)
+  })
+
+  it('rejects protected routes without secret, session, or with expired session', async () => {
+    await request(app).get('/api/snapshot').expect(401)
+
+    await request(app)
+      .get('/api/snapshot')
+      .set('Authorization', secretHeader())
+      .expect(401)
+
+    const { token } = issueToken(TOKEN_SECRET, Date.now() - 48 * 60 * 60 * 1000)
+    await request(app)
+      .get('/api/snapshot')
+      .set('Authorization', sessionHeader(token))
+      .expect(401)
+
+    await request(app).get('/api/health').expect(200)
   })
 })

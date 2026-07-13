@@ -12,6 +12,10 @@ services:
         value: /var/data/hub.sqlite
       - key: CORS_ORIGINS
         value: https://cerredav.github.io,http://localhost:5173
+      - key: HUB_PASSWORD
+        sync: false
+      - key: HUB_TOKEN_SECRET
+        sync: false
     disk:
       name: company-hub-data
       mountPath: /var/data
