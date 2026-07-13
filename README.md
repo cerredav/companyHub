@@ -15,37 +15,61 @@ GitHub Pages hosts the **static client**. Render hosts the **Express + SQLite AP
 
 1. Open [Render Blueprints](https://dashboard.render.com/blueprints) → **New Blueprint Instance** → select `cerredav/companyHub`.
 2. Apply `render.yaml` (Docker web service + 1 GB disk on **Starter** plan — free tier cannot keep SQLite across restarts).
-3. After deploy, confirm health: `https://<your-service>.onrender.com/api/health` → `{ "ok": true }`.
+3. After deploy, set in the Render dashboard (both `sync: false`):
+   - **`HUB_PASSWORD`** — shared login password
+   - **`HUB_TOKEN_SECRET`** — API key; must match the client’s `VITE_HUB_TOKEN_SECRET`
+4. Confirm health: `https://<your-service>.onrender.com/api/health` → `{ "ok": true }`.
 
-CORS is already set for `https://cerredav.github.io` and local Vite.
+CORS is already set for `https://cerredav.github.io` and local Vite. Every `/api` call except `/api/health` requires:
+
+`Authorization: Bearer <HUB_TOKEN_SECRET> [<sessionToken>]`
+
+Login needs the secret only; data routes need secret + session token from login.
 
 ### 2. Deploy the client (GitHub Pages)
 
 1. Repo **Settings → Pages → Source: GitHub Actions**.
-2. Repo **Settings → Secrets and variables → Actions** → add secret:
-   - Name: `VITE_API_URL`
-   - Value: `https://<your-service>.onrender.com/api`
-3. Push to `main` (or re-run **Deploy to GitHub Pages**). Workflow builds with `base=/companyHub/` and that API URL.
+2. Repo **Settings → Secrets and variables → Actions** → add:
+   - `VITE_API_URL` = `https://<your-service>.onrender.com/api`
+   - `VITE_HUB_TOKEN_SECRET` = same value as Render `HUB_TOKEN_SECRET`
+3. Push to `main` (or re-run **Deploy to GitHub Pages**). Workflow builds with `base=/companyHub/` and those env vars.
 
 Local rebuild check:
 
 ```bash
-GITHUB_PAGES=true VITE_API_URL=https://company-hub-api.onrender.com/api npm run build
+GITHUB_PAGES=true \
+  VITE_API_URL=https://company-hub-api.onrender.com/api \
+  VITE_HUB_TOKEN_SECRET=your-shared-secret \
+  npm run build
 ```
 
-Without `VITE_API_URL`, the live site still works offline (IndexedDB only; sync status shows offline).
+Without `VITE_API_URL` / matching token secret, the client cannot authenticate (login requires the API).
 
 ## Quick start
 
 ```bash
 npm install
+npm run server       # API (port 3001) — required for login
 npm run dev          # client (port 5173)
-npm run server       # API (port 3001) — team sync
 ```
 
-Open the URL shown (usually `http://localhost:5173`). Default shared password: **`company`**.
+Open the URL shown (usually `http://localhost:5173`). Defaults for local:
 
-Without the server, the app still works: data lives in the browser (IndexedDB) and seeds on first visit.
+- Password: **`company`** (`HUB_PASSWORD`)
+- API secret: **`dev-hub-secret`** (`HUB_TOKEN_SECRET` / `VITE_HUB_TOKEN_SECRET`)
+
+Tokens last 24 hours; after expiry the gate returns.
+
+Optional env for the API:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `HUB_PASSWORD` | Shared login password | `company` |
+| `HUB_TOKEN_SECRET` | API key in Authorization (must match client) | `dev-hub-secret` |
+| `SQLITE_PATH` | SQLite file path | `server/data/hub.sqlite` |
+| `CORS_ORIGINS` | Allowed browser origins | (empty) |
+
+Client build env: `VITE_HUB_TOKEN_SECRET` (same as `HUB_TOKEN_SECRET`).
 
 ## Sections
 
@@ -103,6 +127,6 @@ npm test         # vitest
 
 ## Limits (MVP)
 
-- Shared password is a UI gate, not real security (API has no auth yet).
+- API uses a shared password + HMAC token (no per-user accounts). Seed content still ships in the client JS bundle.
 - Render free web services lose disk on restart — use Starter + disk for shared sync.
 - No edit history or per-user attribution yet.
