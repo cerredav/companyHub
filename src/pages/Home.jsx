@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import MarkdownDoc from '../components/MarkdownDoc'
-import { getCounts, getRecentUpdates, exportAll, importAll, getDocumentBySlug, saveDocument } from '../db'
+import { getCounts, getRecentUpdates, exportAll, getDocumentBySlug, saveDocument } from '../db'
+import { importAllAndSync } from '../lib/sync'
 
 function downloadJson(data) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -34,7 +35,7 @@ export default function Home() {
         const text = await file.text()
         const data = JSON.parse(text)
         if (!confirm('Import will replace all local data. Continue?')) return
-        await importAll(data)
+        await importAllAndSync(data)
       } catch (err) {
         alert(`Import failed: ${err.message}`)
       }

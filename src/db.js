@@ -87,6 +87,20 @@ db.version(7).stores({
   activities: 'id, [parentType+parentId], createdAt',
 })
 
+db.version(8).stores({
+  documents: 'id, slug, title, updatedAt',
+  engagements: 'id, status, owner, updatedAt',
+  partners: 'id, name, kind, status, updatedAt',
+  teamMembers: 'id, name, team, updatedAt',
+  files: 'id, [parentType+parentId], updatedAt',
+  policies: 'id, name, updatedAt',
+  meetings: 'id, date, updatedAt',
+  buckets: 'id, team, updatedAt',
+  agreements: 'id, partner, updatedAt',
+  activities: 'id, [parentType+parentId], createdAt',
+  outbox: '++seq',
+})
+
 const uid = () => crypto.randomUUID()
 const now = () => new Date().toISOString()
 
@@ -926,6 +940,7 @@ export async function clearAll() {
     db.buckets,
     db.agreements,
     db.activities,
+    db.outbox,
     async () => {
       await Promise.all([
         db.documents.clear(),
@@ -938,6 +953,7 @@ export async function clearAll() {
         db.buckets.clear(),
         db.agreements.clear(),
         db.activities.clear(),
+        db.outbox.clear(),
       ])
     }
   )

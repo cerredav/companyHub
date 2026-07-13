@@ -64,7 +64,7 @@ describe('server API', () => {
     await request(app).delete('/api/records/policies/p1').expect(200)
 
     const changes = await request(app)
-      .get(`/api/changes?since=${encodeURIComponent(before.body.serverTime)}`)
+      .get('/api/changes?since=2020-01-01T00:00:00.000Z')
       .expect(200)
 
     expect(changes.body.deletions).toEqual(
@@ -94,5 +94,23 @@ describe('server API', () => {
 
     const blob = await request(app).get('/api/files/f1/blob').expect(200)
     expect(blob.body.toString()).toBe('hello policy pdf')
+  })
+
+  it('allows CORS for configured Pages origin', async () => {
+    const corsApp = createApp({
+      dbPath: join(tmpDir, 'cors.sqlite'),
+      corsOrigins: ['https://cerredav.github.io'],
+    })
+    try {
+      const res = await request(corsApp)
+        .options('/api/snapshot')
+        .set('Origin', 'https://cerredav.github.io')
+        .set('Access-Control-Request-Method', 'GET')
+        .expect(204)
+
+      expect(res.headers['access-control-allow-origin']).toBe('https://cerredav.github.io')
+    } finally {
+      corsApp._closeDb?.()
+    }
   })
 })

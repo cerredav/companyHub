@@ -1,0 +1,18 @@
+# Blueprint: https://dashboard.render.com/blueprints
+# Persistent disk requires a paid web plan (Starter+). Free tier loses SQLite on restart.
+services:
+  - type: web
+    name: company-hub-api
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: SQLITE_PATH
+        value: /var/data/hub.sqlite
+      - key: CORS_ORIGINS
+        value: https://cerredav.github.io,http://localhost:5173
+    disk:
+      name: company-hub-data
+      mountPath: /var/data
+      sizeGB: 1

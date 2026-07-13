@@ -116,4 +116,26 @@ describe('client sync', () => {
     expect(puts[0].name).toBe('Flush Me')
     expect(await db.outbox.toArray()).toHaveLength(0)
   })
+
+  it('schedules a flush after local writes', async () => {
+    const puts = []
+    vi.stubGlobal('fetch', vi.fn(async (url, init) => {
+      if (init?.method === 'PUT' && String(url).includes('/api/records/policies/')) {
+        puts.push(JSON.parse(init.body))
+        return { ok: true, status: 200 }
+      }
+      if (String(url).endsWith('/api/snapshot')) {
+        return { ok: true, json: async () => emptySnapshot() }
+      }
+      return { ok: true, status: 200, json: async () => emptySnapshot() }
+    }))
+
+    await syncPull().catch(() => {})
+    await db.outbox.clear()
+    await savePolicy({ name: 'Live Sync', notes: '' })
+    await new Promise((r) => setTimeout(r, 400))
+
+    expect(puts.some((p) => p.name === 'Live Sync')).toBe(true)
+    expect(await db.outbox.toArray()).toHaveLength(0)
+  })
 })

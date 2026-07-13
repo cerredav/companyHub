@@ -1,0 +1,11 @@
+node_modules
+dist
+.git
+.github
+server/data
+*.md
+src
+public
+tests
+index.html
+vite.config.js

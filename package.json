@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node --watch server/index.js",
+    "start": "node server/index.js",
+    "seed": "node scripts/seed-server.js",
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
@@ -12,8 +15,10 @@
     "postinstall": "node scripts/patch-pptx-browser.js"
   },
   "dependencies": {
+    "better-sqlite3": "^12.4.1",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
+    "express": "^5.1.0",
     "marked": "^18.0.5",
     "pdfjs-dist": "^5.7.284",
     "pptx-browser": "^4.1.5",
@@ -27,6 +32,7 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^27.0.1",
     "oxlint": "^1.71.0",
+    "supertest": "^7.1.4",
     "vite": "^8.1.1",
     "vitest": "^3.2.7"
   }

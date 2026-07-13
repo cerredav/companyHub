@@ -77,6 +77,20 @@ a { color: var(--larx-blue); text-decoration: none; }
   border-top: 1px solid var(--border-subtle);
 }
 
+.sync-status {
+  font-size: 11px;
+  margin: 0 0 var(--space-3);
+  color: var(--text-muted);
+}
+
+.sync-status--online {
+  color: var(--status-active, #4ade80);
+}
+
+.sync-status--offline {
+  color: var(--text-muted);
+}
+
 .nav-link {
   display: flex;
   align-items: center;

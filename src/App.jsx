@@ -82,6 +82,7 @@ function useHashRoute() {
 export default function App() {
   const [unlocked, setUnlocked] = useState(() => localStorage.getItem(UNLOCK_KEY) === '1')
   const [ready, setReady] = useState(false)
+  const [syncStatus, setSyncStatus] = useState({ state: 'syncing', detail: '' })
   const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark')
   const { base: routeBase, params } = useHashRoute()
 
@@ -91,11 +92,16 @@ export default function App() {
   }, [theme])
 
   useEffect(() => {
-    seedIfEmpty()
-      .then(() => seedNewContent())
-      .then(() => migratePartnerLinks())
-      .then(() => migrateAgreementDashboardLinks())
-      .then(() => setReady(true))
+    import('./lib/sync.js').then(({ syncPull, syncStart }) => {
+      syncPull()
+        .catch(() => {})
+        .then(() => seedIfEmpty())
+        .then(() => seedNewContent())
+        .then(() => migratePartnerLinks())
+        .then(() => migrateAgreementDashboardLinks())
+        .then(() => syncStart(setSyncStatus))
+        .then(() => setReady(true))
+    })
   }, [])
 
   const toggleTheme = () => {
@@ -139,7 +145,7 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <img src="/favicon.svg" alt="" className="sidebar-brand-icon" aria-hidden />
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="sidebar-brand-icon" aria-hidden />
           Larx Hub
         </div>
         <nav>
@@ -155,6 +161,14 @@ export default function App() {
           ))}
         </nav>
         <div className="sidebar-footer">
+          <p
+            className={`sync-status sync-status--${syncStatus.state}`}
+            title={syncStatus.detail || undefined}
+          >
+            {syncStatus.state === 'online' && '● Synced'}
+            {syncStatus.state === 'syncing' && '◌ Syncing…'}
+            {syncStatus.state === 'offline' && '○ Offline — local only'}
+          </p>
           <button className="btn theme-toggle" onClick={toggleTheme}>
             {theme === 'dark' ? '☀ Light mode' : '☾ Dark mode'}
           </button>

@@ -1,7 +1,9 @@
 import { db } from '../db.js'
+import { importAll } from '../db.js'
 
-const API = '/api'
+const API = import.meta.env.VITE_API_URL || '/api'
 const POLL_MS = 20_000
+const FLUSH_DEBOUNCE_MS = 300
 
 export const SYNC_COLLECTIONS = [
   'documents',
@@ -18,6 +20,7 @@ export const SYNC_COLLECTIONS = [
 let applyingRemote = false
 let hooksRegistered = false
 let pollTimer = null
+let flushTimer = null
 let lastSyncAt = ''
 let statusCallback = () => {}
 
@@ -41,6 +44,22 @@ async function enqueue(op, collection, id) {
     id,
     queuedAt: new Date().toISOString(),
   })
+  scheduleFlush()
+}
+
+function scheduleFlush() {
+  if (applyingRemote) return
+  if (flushTimer) clearTimeout(flushTimer)
+  flushTimer = setTimeout(async () => {
+    flushTimer = null
+    try {
+      setStatus('syncing')
+      await flushOutbox()
+      setStatus('online')
+    } catch (err) {
+      setStatus('offline', err.message)
+    }
+  }, FLUSH_DEBOUNCE_MS)
 }
 
 function registerHooks() {
@@ -227,6 +246,10 @@ async function flushDeleteFile(id) {
 }
 
 export async function flushOutbox() {
+  if (flushTimer) {
+    clearTimeout(flushTimer)
+    flushTimer = null
+  }
   const pending = await db.outbox.orderBy('seq').toArray()
   for (const item of pending) {
     if (item.collection === 'files') {
@@ -279,6 +302,33 @@ export async function syncStart(onStatus) {
 export function syncStop() {
   if (pollTimer) clearInterval(pollTimer)
   pollTimer = null
+  if (flushTimer) clearTimeout(flushTimer)
+  flushTimer = null
+}
+
+async function enqueueAllLocal() {
+  await db.outbox.clear()
+  const queuedAt = new Date().toISOString()
+  for (const collection of SYNC_COLLECTIONS) {
+    for (const row of await db[collection].toArray()) {
+      await db.outbox.add({ op: 'put', collection, id: row.id, queuedAt })
+    }
+  }
+  for (const f of await db.files.toArray()) {
+    await db.outbox.add({ op: 'put', collection: 'files', id: f.id, queuedAt })
+  }
+}
+
+/** Replace local data from export and push everything to the server. */
+export async function importAllAndSync(data) {
+  applyingRemote = true
+  try {
+    await importAll(data)
+  } finally {
+    applyingRemote = false
+  }
+  await enqueueAllLocal()
+  await flushOutbox()
 }
 
 /** Test helper — reset sync module state */
@@ -286,6 +336,7 @@ export function _resetSyncForTests() {
   applyingRemote = false
   hooksRegistered = false
   pollTimer = null
+  flushTimer = null
   lastSyncAt = ''
   statusCallback = () => {}
 }

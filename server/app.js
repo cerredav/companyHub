@@ -15,9 +15,46 @@ import {
 
 const defaultDbPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'hub.sqlite')
 
-export function createApp({ dbPath = defaultDbPath } = {}) {
+const CORS_HEADERS = [
+  'Content-Type',
+  'X-Parent-Type',
+  'X-Parent-Id',
+  'X-Name',
+  'X-Mime-Type',
+  'X-Size',
+  'X-Updated-At',
+].join(', ')
+
+function parseCorsOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+export function createApp({
+  dbPath = defaultDbPath,
+  corsOrigins = parseCorsOrigins(process.env.CORS_ORIGINS),
+} = {}) {
   const db = openDb(dbPath)
   const app = express()
+
+  // ponytail: allow Pages/localhost without a cors dependency
+  app.use((req, res, next) => {
+    const origin = req.headers.origin
+    if (origin && corsOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin)
+      res.setHeader('Access-Control-Allow-Methods', 'GET,PUT,DELETE,OPTIONS')
+      res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
+      res.setHeader('Vary', 'Origin')
+    }
+    if (req.method === 'OPTIONS') return res.sendStatus(204)
+    next()
+  })
+
+  app.get('/api/health', (_req, res) => {
+    res.json({ ok: true })
+  })
 
   app.get('/api/snapshot', (_req, res) => {
     res.json(listSnapshot(db))
@@ -88,5 +125,6 @@ export function createApp({ dbPath = defaultDbPath } = {}) {
   })
 
   app._closeDb = () => db.close()
+  app._db = db
   return app
 }
