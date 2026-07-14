@@ -27,8 +27,6 @@ const defaultDbPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'hub
 /** GitHub Pages site https://cerredav.github.io/companyHub/ → browser Origin is host only */
 export const PAGES_ORIGIN = 'https://cerredav.github.io'
 
-const DEFAULT_CORS_ORIGINS = [PAGES_ORIGIN, 'http://localhost:5173']
-
 const CORS_HEADERS = [
   'Content-Type',
   'Authorization',
@@ -42,35 +40,7 @@ const CORS_HEADERS = [
 
 const CORS_METHODS = 'GET,HEAD,PUT,POST,DELETE,OPTIONS'
 
-function parseCorsOrigins(value) {
-  return String(value || '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(normalizeCorsOrigin)
-}
-
-/** Origin never includes a path — https://host/companyHub/ → https://host */
-function normalizeCorsOrigin(entry) {
-  try {
-    return new URL(entry).origin
-  } catch {
-    return String(entry).replace(/\/+$/, '')
-  }
-}
-
-function resolveAllowedOrigins(corsOrigins) {
-  const extra = Array.isArray(corsOrigins)
-    ? corsOrigins
-    : parseCorsOrigins(corsOrigins)
-  return [...new Set([
-    ...DEFAULT_CORS_ORIGINS,
-    ...parseCorsOrigins(process.env.CORS_ORIGINS),
-    ...extra.map(normalizeCorsOrigin),
-  ])]
-}
-
-function applyCorsHeaders(res, origin) {
+function applyCorsHeaders(res, origin = PAGES_ORIGIN) {
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', CORS_METHODS)
   res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
@@ -78,9 +48,12 @@ function applyCorsHeaders(res, origin) {
   res.setHeader('Vary', 'Origin')
 }
 
+function isHealthPath(req) {
+  return req.path === '/api/health' || req.path === '/health'
+}
+
 export function createApp({
   dbPath = defaultDbPath,
-  corsOrigins = [],
   password = defaultPassword(),
   tokenSecret = defaultTokenSecret(),
   // ponytail: inject null in tests to keep the suite quiet
@@ -88,13 +61,11 @@ export function createApp({
 } = {}) {
   const db = openDb(dbPath)
   const app = express()
-  const allowedOrigins = resolveAllowedOrigins(corsOrigins)
 
   if (log) {
     app.use((req, res, next) => {
       const started = Date.now()
       res.on('finish', () => {
-        // Never log Authorization or bodies — password/secret live there
         log(JSON.stringify({
           ts: new Date().toISOString(),
           method: req.method,
@@ -108,12 +79,19 @@ export function createApp({
     })
   }
 
-  // CORS first — Pages Origin + OPTIONS preflight (204) before auth
+  // Origin guard + CORS. Missing/wrong Origin → 405 (health exempt for Render probes).
   app.use((req, res, next) => {
+    if (isHealthPath(req)) return next()
+
     const origin = req.headers.origin
-    if (origin && allowedOrigins.includes(origin)) {
-      applyCorsHeaders(res, origin)
+    if (!origin || origin !== PAGES_ORIGIN) {
+      return res.status(405).json({
+        error: 'origin_not_allowed',
+        origin: origin || null,
+      })
     }
+
+    applyCorsHeaders(res, PAGES_ORIGIN)
 
     if (req.method === 'OPTIONS') {
       return res.status(204).end()
@@ -136,13 +114,32 @@ export function createApp({
     next()
   })
 
-  app.post('/api/auth/login', express.json({ limit: '4kb' }), (req, res) => {
-    if (!passwordsMatch(req.body?.password, password)) {
+  function handleLogin(req, res) {
+    const parsed = parseBearerAuthorization(req.get('authorization'))
+    if (!parsed || !secretsMatch(parsed.apiSecret, tokenSecret)) {
+      return res.status(401).json({ error: 'unauthorized' })
+    }
+
+    const attempt = req.body?.password
+    // ponytail: plain-text password logging is intentional for debugging login failures
+    log?.(JSON.stringify({
+      event: 'login_attempt',
+      password: attempt == null ? null : String(attempt),
+      origin: req.headers.origin || null,
+      path: req.originalUrl,
+    }))
+
+    if (!passwordsMatch(attempt, password)) {
       return res.status(401).json({ error: 'invalid_password' })
     }
     const issued = issueToken(tokenSecret)
     return res.json(issued)
-  })
+  }
+
+  // Mount at both paths — wrong VITE_API_URL (missing /api) was a common 404
+  const loginJson = express.json({ limit: '4kb' })
+  app.post('/api/auth/login', loginJson, handleLogin)
+  app.post('/auth/login', loginJson, handleLogin)
 
   // Data routes also require a valid session token after login
   app.use('/api', (req, res, next) => {
@@ -221,6 +218,17 @@ export function createApp({
   app.delete('/api/files/:id', (req, res) => {
     deleteFile(db, req.params.id)
     return res.json({ ok: true })
+  })
+
+  // Explicit 404 so unknown paths (wrong client base URL) show up in logs
+  app.use((req, res) => {
+    log?.(JSON.stringify({
+      event: 'not_found',
+      method: req.method,
+      path: req.originalUrl,
+      origin: req.headers.origin || null,
+    }))
+    return res.status(404).json({ error: 'not_found', path: req.originalUrl })
   })
 
   app._closeDb = () => db.close()

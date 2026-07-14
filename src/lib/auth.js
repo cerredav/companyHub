@@ -2,7 +2,13 @@ const AUTH_KEY = 'companyHubAuth'
 const LEGACY_UNLOCK_KEY = 'companyHubUnlocked'
 export const AUTH_EXPIRED_EVENT = 'hub:auth-expired'
 
-const API = import.meta.env.VITE_API_URL || '/api'
+/** Normalize so both `https://host/api` and `https://host/api/` work. */
+function apiRoot() {
+  const raw = String(import.meta.env.VITE_API_URL || '/api').trim()
+  return raw.replace(/\/+$/, '') || '/api'
+}
+
+const API = apiRoot()
 // Must match server HUB_TOKEN_SECRET
 const HUB_TOKEN_SECRET = import.meta.env.VITE_HUB_TOKEN_SECRET || 'dev-hub-secret'
 
@@ -47,10 +53,21 @@ export function authHeaders({ includeSession = true } = {}) {
 }
 
 /**
- * POST /api/auth/login — stores session token on success.
+ * POST …/auth/login — stores session token on success.
  * Throws { code: 'invalid_password' | 'unreachable' | 'bad_response' | 'unauthorized', message }
  */
 export async function login(password) {
+  // Relative /api on GitHub Pages hits Pages itself → 404, not the Render API
+  if (
+    typeof location !== 'undefined'
+    && location.hostname.endsWith('github.io')
+    && API.startsWith('/')
+  ) {
+    const err = new Error('API URL not configured — set VITE_API_URL for Pages builds')
+    err.code = 'bad_response'
+    throw err
+  }
+
   let res
   try {
     res = await fetch(`${API}/auth/login`, {
@@ -77,6 +94,12 @@ export async function login(password) {
     }
     const err = new Error('Unauthorized — check API token configuration')
     err.code = 'unauthorized'
+    throw err
+  }
+
+  if (res.status === 404) {
+    const err = new Error(`Login endpoint not found (${API}/auth/login)`)
+    err.code = 'bad_response'
     throw err
   }
 
