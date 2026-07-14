@@ -87,7 +87,7 @@ Client build env: `VITE_HUB_TOKEN_SECRET` (same as `HUB_TOKEN_SECRET`).
 
 First-run seed comes from [`src/seed.js`](src/seed.js), populated from downloaded infonet page sources. Existing installs get a one-shot top-up (`seedNewContent`) for policies, home cards, and strategy (only if strategy was never edited).
 
-Server SQLite seed: `npm run seed` (or `--force`) loads `server/seed/company-hub-2026-07-09.json`. Empty DBs auto-seed on API startup.
+Server SQLite seed: `npm run seed` (or `--force`) loads `server/seed/company-hub-2026-07-09.json`.
 
 To reset client data: clear site data in browser devtools (IndexedDB + localStorage), or import a fresh export.
 
