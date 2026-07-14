@@ -26,6 +26,8 @@ const defaultDbPath = join(dirname(fileURLToPath(import.meta.url)), 'data', 'hub
 
 /** GitHub Pages site https://cerredav.github.io/companyHub/ → browser Origin is host only */
 export const PAGES_ORIGIN = 'https://cerredav.github.io'
+/** Local Vite — allowed only when not in production */
+export const DEV_ORIGIN = 'http://localhost:5174'
 
 const CORS_HEADERS = [
   'Content-Type',
@@ -40,7 +42,15 @@ const CORS_HEADERS = [
 
 const CORS_METHODS = 'GET,HEAD,PUT,POST,DELETE,OPTIONS'
 
-function applyCorsHeaders(res, origin = PAGES_ORIGIN) {
+export function isDevMode(env = process.env) {
+  return env.NODE_ENV !== 'production'
+}
+
+function allowedOriginsFor(devMode) {
+  return devMode ? [PAGES_ORIGIN, DEV_ORIGIN] : [PAGES_ORIGIN]
+}
+
+function applyCorsHeaders(res, origin) {
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', CORS_METHODS)
   res.setHeader('Access-Control-Allow-Headers', CORS_HEADERS)
@@ -58,9 +68,11 @@ export function createApp({
   tokenSecret = defaultTokenSecret(),
   // ponytail: inject null in tests to keep the suite quiet
   log = process.env.NODE_ENV === 'test' ? null : (...args) => console.log(...args),
+  devMode = isDevMode(),
 } = {}) {
   const db = openDb(dbPath)
   const app = express()
+  const allowedOrigins = allowedOriginsFor(devMode)
 
   if (log) {
     app.use((req, res, next) => {
@@ -84,14 +96,14 @@ export function createApp({
     if (isHealthPath(req)) return next()
 
     const origin = req.headers.origin
-    if (!origin || origin !== PAGES_ORIGIN) {
+    if (!origin || !allowedOrigins.includes(origin)) {
       return res.status(405).json({
         error: 'origin_not_allowed',
         origin: origin || null,
       })
     }
 
-    applyCorsHeaders(res, PAGES_ORIGIN)
+    applyCorsHeaders(res, origin)
 
     if (req.method === 'OPTIONS') {
       return res.status(204).end()

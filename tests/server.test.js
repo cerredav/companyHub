@@ -169,6 +169,42 @@ describe('server API', () => {
     await request(app).get('/api/health').expect(200)
   })
 
+  it('allows localhost:5174 only in dev mode', async () => {
+    const prod = createApp({
+      dbPath: join(tmpDir, 'prod-origin.sqlite'),
+      password: PASSWORD,
+      tokenSecret: TOKEN_SECRET,
+      devMode: false,
+    })
+    const dev = createApp({
+      dbPath: join(tmpDir, 'dev-origin.sqlite'),
+      password: PASSWORD,
+      tokenSecret: TOKEN_SECRET,
+      devMode: true,
+    })
+    try {
+      await request(prod)
+        .post('/api/auth/login')
+        .set('Origin', 'http://localhost:5174')
+        .set('Authorization', secretHeader())
+        .send({ password: PASSWORD })
+        .expect(405)
+
+      const ok = await request(dev)
+        .post('/api/auth/login')
+        .set('Origin', 'http://localhost:5174')
+        .set('Authorization', secretHeader())
+        .send({ password: PASSWORD })
+        .expect(200)
+
+      expect(ok.headers['access-control-allow-origin']).toBe('http://localhost:5174')
+      expect(ok.body.token).toBeTruthy()
+    } finally {
+      prod._closeDb?.()
+      dev._closeDb?.()
+    }
+  })
+
   it('login requires API secret; returns session; wrong password is 401', async () => {
     await asPages(request(app).post('/api/auth/login'))
       .send({ password: PASSWORD })
