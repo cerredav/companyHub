@@ -23,11 +23,11 @@ const defaultSeedPath = join(
 
 export function loadExport(path = defaultSeedPath) {
   if (!existsSync(path)) {
-    throw new Error(`Seed file not found: ${path}`)
+    return null
   }
   const data = JSON.parse(readFileSync(path, 'utf8'))
   if (!data || (data.version !== 1 && data.version !== 2)) {
-    throw new Error('Invalid export file: expected version 1 or 2')
+    return null
   }
   return data
 }
